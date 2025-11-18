@@ -40,11 +40,14 @@ export const WorldsProvider = ({ children }) => {
     }
   }, [worlds]);
 
-  const createWorld = (name, systemPrompt) => {
+  const createWorld = (name, author, elevenLabsVoiceId, heyGenAvatarId, systemPrompt) => {
     const newWorld = {
       id: `world-${Date.now()}`,
       name,
-      systemPrompt,
+      author: author || '',
+      elevenLabsVoiceId: elevenLabsVoiceId || '',
+      heyGenAvatarId: heyGenAvatarId || '',
+      systemPrompt: systemPrompt || '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

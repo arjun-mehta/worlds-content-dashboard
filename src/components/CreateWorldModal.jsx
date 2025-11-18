@@ -4,16 +4,19 @@ import { useWorlds } from '../contexts/WorldsContext';
 export default function CreateWorldModal({ onClose }) {
   const { createWorld } = useWorlds();
   const [name, setName] = useState('');
+  const [author, setAuthor] = useState('');
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState('');
+  const [heyGenAvatarId, setHeyGenAvatarId] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [error, setError] = useState(null);
 
   const handleCreate = () => {
     if (!name.trim()) {
-      setError('Please enter a world name');
+      setError('Please enter a book name');
       return;
     }
 
-    createWorld(name, systemPrompt);
+    createWorld(name, author, elevenLabsVoiceId, heyGenAvatarId, systemPrompt);
     onClose();
   };
 
@@ -40,7 +43,7 @@ export default function CreateWorldModal({ onClose }) {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                World Name (Book Name)
+                Book Name *
               </label>
               <input
                 type="text"
@@ -58,7 +61,46 @@ export default function CreateWorldModal({ onClose }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                System Prompt (Optional - can edit later)
+                Author
+              </label>
+              <input
+                type="text"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder="e.g., Sun Tzu"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                ElevenLabs Voice ID
+              </label>
+              <input
+                type="text"
+                value={elevenLabsVoiceId}
+                onChange={(e) => setElevenLabsVoiceId(e.target.value)}
+                placeholder="Enter ElevenLabs voice ID"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                HeyGen Avatar ID
+              </label>
+              <input
+                type="text"
+                value={heyGenAvatarId}
+                onChange={(e) => setHeyGenAvatarId(e.target.value)}
+                placeholder="Enter HeyGen avatar ID"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Scripting System Prompt (Optional - can edit later)
               </label>
               <textarea
                 value={systemPrompt}

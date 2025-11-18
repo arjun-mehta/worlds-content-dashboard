@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useVideos } from '../contexts/VideosContext';
 import { generateScript } from '../services/openai';
+import { generateAudio } from '../services/elevenlabs';
 import { generateVideo } from '../services/heygen';
 
 export default function ChapterCreator({ world, onClose }) {
   const { createVideo, updateVideo } = useVideos();
   const [chapterTitle, setChapterTitle] = useState('');
-  const [avatarId, setAvatarId] = useState('');
-  const [step, setStep] = useState('input'); // 'input' | 'generating' | 'script' | 'generating-video' | 'complete'
+  const [avatarId, setAvatarId] = useState(world.heyGenAvatarId || '');
+  const [step, setStep] = useState('input'); // 'input' | 'generating' | 'script' | 'generating-audio' | 'audio' | 'generating-video' | 'complete'
   const [script, setScript] = useState('');
+  const [audioUrl, setAudioUrl] = useState(null);
   const [error, setError] = useState(null);
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
 
   const handleGenerateScript = async () => {
@@ -44,6 +47,28 @@ export default function ChapterCreator({ world, onClose }) {
     }
   };
 
+  const handleGenerateAudio = async () => {
+    if (!world.elevenLabsVoiceId?.trim()) {
+      setError('Please set an ElevenLabs Voice ID for this world first');
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    setError(null);
+    setStep('generating-audio');
+
+    try {
+      const audioResponse = await generateAudio(script, world.elevenLabsVoiceId);
+      setAudioUrl(audioResponse.audioUrl);
+      setStep('audio');
+    } catch (err) {
+      setError(err.message || 'Failed to generate audio');
+      setStep('script');
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
   const handleGenerateVideo = async () => {
     if (!avatarId.trim()) {
       setError('Please enter an avatar ID');
@@ -58,6 +83,11 @@ export default function ChapterCreator({ world, onClose }) {
       // Create video record
       const video = createVideo(world.id, chapterTitle, script, avatarId);
       
+      // Update video with audio URL if available
+      if (audioUrl) {
+        updateVideo(video.id, { audioUrl });
+      }
+      
       // Generate video via HeyGen
       const heyGenResponse = await generateVideo(script, avatarId);
       
@@ -70,7 +100,7 @@ export default function ChapterCreator({ world, onClose }) {
       setStep('complete');
     } catch (err) {
       setError(err.message || 'Failed to generate video');
-      setStep('script');
+      setStep('audio');
     } finally {
       setIsGeneratingVideo(false);
     }
@@ -79,7 +109,8 @@ export default function ChapterCreator({ world, onClose }) {
   const handleClose = () => {
     setChapterTitle('');
     setScript('');
-    setAvatarId('');
+    setAudioUrl(null);
+    setAvatarId(world.heyGenAvatarId || '');
     setStep('input');
     setError(null);
     onClose();
@@ -158,6 +189,57 @@ export default function ChapterCreator({ world, onClose }) {
                   className="w-full h-64 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 />
               </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGenerateAudio}
+                  disabled={isGeneratingAudio}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isGeneratingAudio ? 'Generating...' : 'Generate Audio'}
+                </button>
+                <button
+                  onClick={() => setStep('input')}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Generating Audio */}
+          {step === 'generating-audio' && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Generating audio...</p>
+            </div>
+          )}
+
+          {/* Step 3: Audio Ready */}
+          {step === 'audio' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Generated Script
+                </label>
+                <textarea
+                  value={script}
+                  onChange={(e) => setScript(e.target.value)}
+                  className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Generated Audio
+                </label>
+                {audioUrl && (
+                  <audio controls className="w-full mb-2">
+                    <source src={audioUrl} type="audio/mpeg" />
+                    Your browser does not support the audio element.
+                  </audio>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Avatar ID (HeyGen)
@@ -179,7 +261,7 @@ export default function ChapterCreator({ world, onClose }) {
                   {isGeneratingVideo ? 'Generating...' : 'Generate Video'}
                 </button>
                 <button
-                  onClick={() => setStep('input')}
+                  onClick={() => setStep('script')}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
                 >
                   Back

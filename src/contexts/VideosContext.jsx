@@ -45,6 +45,7 @@ export const VideosProvider = ({ children }) => {
       chapterTitle,
       chapterNumber,
       script,
+      audioUrl: null,
       heyGenVideoId: null,
       heyGenStatus: 'pending',
       avatarId,
