@@ -52,21 +52,24 @@ app.use((req, res, next) => {
 // Configure multer for file uploads (memory storage)
 const upload = multer({ storage: multer.memoryStorage() });
 
-const HEYGEN_API_KEY = process.env.VITE_HEYGEN_API_KEY;
+// Use non-prefixed env vars for server (VITE_ prefix is only for client build)
+const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY || process.env.VITE_HEYGEN_API_KEY;
 const HEYGEN_API_URL = 'https://api.heygen.com';
 
 // Initialize Supabase client
-// Try both VITE_ prefixed (for consistency) and non-prefixed versions
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+// In server-side code, use non-prefixed env vars (VITE_ prefix is only for client-side build)
+// Check both for backwards compatibility
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 let supabase = null;
 
 if (supabaseUrl && supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey);
-  console.log('Supabase initialized with URL:', supabaseUrl.substring(0, 30) + '...');
+  console.log('✅ Supabase initialized with URL:', supabaseUrl.substring(0, 30) + '...');
 } else {
-  console.warn('Supabase not configured - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY required');
-  console.warn('supabaseUrl:', !!supabaseUrl, 'supabaseKey:', !!supabaseKey);
+  console.warn('⚠️ Supabase not configured - SUPABASE_URL and SUPABASE_ANON_KEY required');
+  console.warn('   (For Railway: Set SUPABASE_URL and SUPABASE_ANON_KEY in environment variables)');
+  console.warn('   supabaseUrl:', !!supabaseUrl, 'supabaseKey:', !!supabaseKey);
 }
 
 // Health check endpoint

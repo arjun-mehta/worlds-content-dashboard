@@ -40,13 +40,20 @@ Go to **Variables** tab and add:
 # Port (Railway sets this automatically, but you can override)
 PORT=3001
 
-# API Keys
+# API Keys (set both prefixed and non-prefixed for server and client)
+HEYGEN_API_KEY=your_heygen_api_key
 VITE_HEYGEN_API_KEY=your_heygen_api_key
+OPENAI_API_KEY=your_openai_api_key
 VITE_OPENAI_API_KEY=your_openai_api_key
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
 VITE_ELEVENLABS_API_KEY=your_elevenlabs_api_key
 
-# Supabase
+# Supabase (REQUIRED: set both prefixed and non-prefixed)
+# - Non-prefixed (SUPABASE_URL) → Used by Node.js server at runtime
+# - Prefixed (VITE_SUPABASE_URL) → Used by Vite during build for client bundle
+SUPABASE_URL=https://osotvxgsxeyajghjxqgr.supabase.co
 VITE_SUPABASE_URL=https://osotvxgsxeyajghjxqgr.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # CORS (optional - only if you need to allow specific origins)
@@ -55,7 +62,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 **Important Notes:**
 - Railway automatically provides `PORT` - you don't need to set it
-- All `VITE_*` variables are needed for both build-time (frontend) and runtime (backend)
+- **Set BOTH prefixed (`VITE_*`) and non-prefixed versions** of each variable:
+  - Non-prefixed (e.g., `SUPABASE_URL`) → Used by the Node.js server at runtime
+  - Prefixed (e.g., `VITE_SUPABASE_URL`) → Used by Vite during build to inject into client bundle
 - The frontend will use relative URLs in production (same domain), so no `VITE_API_URL` needed
 
 ### 5. Deploy
@@ -119,8 +128,10 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 | `VITE_HEYGEN_API_KEY` | Yes | HeyGen API key |
 | `VITE_OPENAI_API_KEY` | Yes | OpenAI API key |
 | `VITE_ELEVENLABS_API_KEY` | Yes | ElevenLabs API key |
-| `VITE_SUPABASE_URL` | Yes | Your Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Yes | Your Supabase anon key |
+| `SUPABASE_URL` | Yes | Your Supabase project URL (for server) |
+| `VITE_SUPABASE_URL` | Yes | Your Supabase project URL (for client build) |
+| `SUPABASE_ANON_KEY` | Yes | Your Supabase anon key (for server) |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Your Supabase anon key (for client build) |
 | `ALLOWED_ORIGINS` | No | Comma-separated list of allowed CORS origins |
 | `NODE_ENV` | Auto-set | Set to `production` by Railway |
 
