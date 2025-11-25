@@ -26,16 +26,17 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: function (origin, callback) {
-    // In production when serving from same domain, allow same-origin requests
-    if (process.env.NODE_ENV === 'production' && !origin) {
-      return callback(null, true); // Same-origin request
+    // In production when serving from same domain, allow all requests
+    // (frontend and backend are on the same Railway domain)
+    if (process.env.NODE_ENV === 'production') {
+      return callback(null, true);
     }
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    // In development, check allowed origins
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      // In production, be more strict
       callback(new Error('Not allowed by CORS'));
     }
   },
