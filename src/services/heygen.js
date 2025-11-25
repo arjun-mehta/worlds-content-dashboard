@@ -1,5 +1,6 @@
 // HeyGen service for video generation
 // Uses backend server to avoid CORS issues
+import { API_URL } from '../config';
 
 // Normalize HeyGen status to match database constraint
 // Database allows: 'pending', 'processing', 'completed', 'failed'
@@ -34,7 +35,7 @@ const uploadAudioAsset = async (audioBlob) => {
     formData.append('audio', audioBlob, 'audio.mp3');
 
     console.log('Sending audio to backend, size:', audioBlob.size);
-    const response = await fetch('http://localhost:3001/api/heygen/upload-audio', {
+    const response = await fetch(`${API_URL}/api/heygen/upload-audio`, {
       method: 'POST',
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary
@@ -74,7 +75,7 @@ export const generateVideo = async (audioBlob, avatarId, videoTitle = 'Generated
     const audioUrl = await uploadAudioAsset(audioBlob);
 
     // Step 2: Generate video via backend server using audio_url
-    const response = await fetch('http://localhost:3001/api/heygen/generate-video', {
+    const response = await fetch(`${API_URL}/api/heygen/generate-video`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -109,7 +110,7 @@ export const generateVideo = async (audioBlob, avatarId, videoTitle = 'Generated
 // Check video status and get video URL
 export const checkVideoStatus = async (videoId) => {
   try {
-    const response = await fetch(`http://localhost:3001/api/heygen/video-status/${videoId}`, {
+    const response = await fetch(`${API_URL}/api/heygen/video-status/${videoId}`, {
       method: 'GET',
     });
 

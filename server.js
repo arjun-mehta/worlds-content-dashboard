@@ -5,15 +5,40 @@ import dotenv from 'dotenv';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+// Use PORT from environment (required by Railway and other hosting platforms)
+const serverPort = process.env.PORT || 3001;
 
 // Middleware
+// CORS configuration - allow requests from frontend
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173'];
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // In production when serving from same domain, allow same-origin requests
+    if (process.env.NODE_ENV === 'production' && !origin) {
+      return callback(null, true); // Same-origin request
+    }
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      // In production, be more strict
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -508,12 +533,37 @@ app.get('/api/heygen/video-status/:videoId', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Serve static files from the React app in production
+// Check if dist folder exists (means we're in production build)
+const distPath = join(__dirname, 'dist');
+const isProduction = process.env.NODE_ENV === 'production' || existsSync(distPath);
+
+if (isProduction) {
+  // Serve static files from the dist directory
+  app.use(express.static(distPath));
+  
+  // Handle React routing - return all requests to React app
+  app.get('*', (req, res) => {
+    // Don't serve index.html for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(join(distPath, 'index.html'));
+  });
+}
+
+app.listen(serverPort, () => {
+  console.log(`Server running on port ${serverPort}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Local URL: http://localhost:${serverPort}`);
+  }
   console.log('Available endpoints:');
   console.log('  GET  /api/health');
   console.log('  POST /api/heygen/upload-audio');
   console.log('  POST /api/heygen/generate-video');
   console.log('  GET  /api/heygen/video-status/:videoId');
+  if (process.env.NODE_ENV === 'production') {
+    console.log('  Serving React app from /dist');
+  }
 });
 
