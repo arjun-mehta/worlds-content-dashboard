@@ -5,12 +5,20 @@ import { generateAudio } from '../services/elevenlabs';
 import { generateVideo } from '../services/heygen';
 
 export default function ChapterCreator({ world, onClose }) {
-  const { createVideo, updateVideo } = useVideos();
+  const { createVideo, updateVideo, pollVideoStatus, getVideosByWorldId } = useVideos();
+  const existingVideos = getVideosByWorldId(world.id);
+  const maxChapterNumber = existingVideos.length > 0 
+    ? Math.max(...existingVideos.map(v => v.chapterNumber || 0))
+    : 0;
+  const suggestedChapterNumber = maxChapterNumber + 1;
+  
   const [chapterTitle, setChapterTitle] = useState('');
-  const [avatarId, setAvatarId] = useState(world.heyGenAvatarId || '');
+  const [chapterNumber, setChapterNumber] = useState(suggestedChapterNumber.toString());
+  const [avatarId, setAvatarId] = useState(world.heyGenAvatarId || 'Carlotta_BizTalk_Side_public');
   const [step, setStep] = useState('input'); // 'input' | 'generating' | 'script' | 'generating-audio' | 'audio' | 'generating-video' | 'complete'
   const [script, setScript] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
   const [error, setError] = useState(null);
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
@@ -19,6 +27,11 @@ export default function ChapterCreator({ world, onClose }) {
   const handleGenerateScript = async () => {
     if (!chapterTitle.trim()) {
       setError('Please enter a chapter title');
+      return;
+    }
+
+    if (!chapterNumber || isNaN(parseInt(chapterNumber)) || parseInt(chapterNumber) < 1) {
+      setError('Please enter a valid chapter number (must be 1 or greater)');
       return;
     }
 
@@ -60,6 +73,7 @@ export default function ChapterCreator({ world, onClose }) {
     try {
       const audioResponse = await generateAudio(script, world.elevenLabsVoiceId);
       setAudioUrl(audioResponse.audioUrl);
+      setAudioBlob(audioResponse.audioBlob);
       setStep('audio');
     } catch (err) {
       setError(err.message || 'Failed to generate audio');
@@ -75,29 +89,52 @@ export default function ChapterCreator({ world, onClose }) {
       return;
     }
 
+    if (!audioBlob) {
+      setError('Audio is required to generate video. Please generate audio first.');
+      return;
+    }
+
     setIsGeneratingVideo(true);
     setError(null);
     setStep('generating-video');
 
     try {
-      // Create video record
-      const video = createVideo(world.id, chapterTitle, script, avatarId);
+      // Generate video via HeyGen using the audio blob (this uploads audio to Supabase first)
+      const heyGenResponse = await generateVideo(audioBlob, avatarId, chapterTitle);
+      console.log('✅ HeyGen response:', heyGenResponse);
+      console.log('✅ Supabase audio URL:', heyGenResponse.audioUrl);
       
-      // Update video with audio URL if available
-      if (audioUrl) {
-        updateVideo(video.id, { audioUrl });
-      }
-      
-      // Generate video via HeyGen
-      const heyGenResponse = await generateVideo(script, avatarId);
+      // Create video record with the Supabase audio URL from HeyGen response
+      const video = await createVideo(
+        world.id, 
+        chapterTitle, 
+        parseInt(chapterNumber),
+        script, 
+        avatarId, 
+        heyGenResponse.audioUrl // Pass Supabase URL directly to createVideo
+      );
+      console.log('✅ Video created with Supabase audio URL:', video);
       
       // Update video with HeyGen info
-      updateVideo(video.id, {
+      await updateVideo(video.id, {
         heyGenVideoId: heyGenResponse.videoId,
         heyGenStatus: heyGenResponse.status,
       });
+      console.log('✅ Video updated with HeyGen info');
+
+      // Start polling for video status if it's processing
+      if (heyGenResponse.status === 'processing' && heyGenResponse.videoId) {
+        console.log('🔄 Starting to poll for video status...');
+        pollVideoStatus(video.id, heyGenResponse.videoId);
+      }
 
       setStep('complete');
+      console.log('✅ Step set to complete - video should be visible in dashboard');
+      
+      // Auto-close modal after 2 seconds so user can see the video in the dashboard
+      setTimeout(() => {
+        handleClose();
+      }, 2000);
     } catch (err) {
       setError(err.message || 'Failed to generate video');
       setStep('audio');
@@ -108,9 +145,11 @@ export default function ChapterCreator({ world, onClose }) {
 
   const handleClose = () => {
     setChapterTitle('');
+    setChapterNumber('');
     setScript('');
     setAudioUrl(null);
-    setAvatarId(world.heyGenAvatarId || '');
+    setAudioBlob(null);
+    setAvatarId(world.heyGenAvatarId || 'Carlotta_BizTalk_Side_public');
     setStep('input');
     setError(null);
     onClose();
@@ -118,20 +157,20 @@ export default function ChapterCreator({ world, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded border border-gray-300 max-w-6xl w-full mx-4 max-h-[95vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Create New Chapter</h2>
+            <h2 className="text-2xl font-bold text-black">Create New Chapter</h2>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl"
+              className="text-gray-600 hover:text-black text-2xl"
             >
               ×
             </button>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            <div className="mb-4 p-3 bg-gray-100 border border-gray-400 rounded text-black">
               {error}
             </div>
           )}
@@ -140,7 +179,25 @@ export default function ChapterCreator({ world, onClose }) {
           {step === 'input' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
+                  Chapter Number
+                </label>
+                <input
+                  type="number"
+                  value={chapterNumber}
+                  onChange={(e) => setChapterNumber(e.target.value)}
+                  placeholder={`Suggested: ${suggestedChapterNumber}`}
+                  min="1"
+                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                />
+                {suggestedChapterNumber > 1 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Suggested: {suggestedChapterNumber} (next available)
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
                   Chapter Title
                 </label>
                 <input
@@ -148,19 +205,19 @@ export default function ChapterCreator({ world, onClose }) {
                   value={chapterTitle}
                   onChange={(e) => setChapterTitle(e.target.value)}
                   placeholder="e.g., Introduction to Quantum Physics"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleGenerateScript}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                  className="flex-1 bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
                 >
                   Generate Script
                 </button>
                 <button
                   onClick={handleClose}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
+                  className="bg-white hover:bg-gray-100 text-black font-medium py-2 px-4 rounded transition-colors border border-gray-300"
                 >
                   Cancel
                 </button>
@@ -171,38 +228,40 @@ export default function ChapterCreator({ world, onClose }) {
           {/* Generating Script */}
           {step === 'generating' && (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
               <p className="text-gray-600">Generating script...</p>
             </div>
           )}
 
           {/* Step 2: Review Script */}
           {step === 'script' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="grid grid-cols-2 gap-6 min-h-[70vh]">
+              <div className="flex flex-col">
+                <label className="block text-sm font-medium text-black mb-2">
                   Generated Script
                 </label>
                 <textarea
                   value={script}
                   onChange={(e) => setScript(e.target.value)}
-                  className="w-full h-64 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="flex-1 w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black resize-none"
                 />
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleGenerateAudio}
-                  disabled={isGeneratingAudio}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {isGeneratingAudio ? 'Generating...' : 'Generate Audio'}
-                </button>
-                <button
-                  onClick={() => setStep('input')}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
-                >
-                  Back
-                </button>
+              <div className="flex flex-col justify-end space-y-4">
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleGenerateAudio}
+                    disabled={isGeneratingAudio}
+                    className="w-full bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingAudio ? 'Generating...' : 'Generate Audio'}
+                  </button>
+                  <button
+                    onClick={() => setStep('input')}
+                    className="w-full bg-white hover:bg-gray-100 text-black font-medium py-2 px-4 rounded transition-colors border border-gray-300"
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -210,62 +269,64 @@ export default function ChapterCreator({ world, onClose }) {
           {/* Generating Audio */}
           {step === 'generating-audio' && (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
               <p className="text-gray-600">Generating audio...</p>
             </div>
           )}
 
           {/* Step 3: Audio Ready */}
           {step === 'audio' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="grid grid-cols-2 gap-6 min-h-[70vh]">
+              <div className="flex flex-col">
+                <label className="block text-sm font-medium text-black mb-2">
                   Generated Script
                 </label>
                 <textarea
                   value={script}
                   onChange={(e) => setScript(e.target.value)}
-                  className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="flex-1 w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black resize-none"
                   readOnly
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Generated Audio
-                </label>
-                {audioUrl && (
-                  <audio controls className="w-full mb-2">
-                    <source src={audioUrl} type="audio/mpeg" />
-                    Your browser does not support the audio element.
-                  </audio>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Avatar ID (HeyGen)
-                </label>
-                <input
-                  type="text"
-                  value={avatarId}
-                  onChange={(e) => setAvatarId(e.target.value)}
-                  placeholder="Enter HeyGen avatar ID"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleGenerateVideo}
-                  disabled={isGeneratingVideo}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {isGeneratingVideo ? 'Generating...' : 'Generate Video'}
-                </button>
-                <button
-                  onClick={() => setStep('script')}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
-                >
-                  Back
-                </button>
+              <div className="flex flex-col space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Generated Audio
+                  </label>
+                  {audioUrl && (
+                    <audio controls className="w-full mb-2">
+                      <source src={audioUrl} type="audio/mpeg" />
+                      Your browser does not support the audio element.
+                    </audio>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Avatar ID (HeyGen)
+                  </label>
+                  <input
+                    type="text"
+                    value={avatarId}
+                    onChange={(e) => setAvatarId(e.target.value)}
+                    placeholder="Enter HeyGen avatar ID"
+                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 mt-auto">
+                  <button
+                    onClick={handleGenerateVideo}
+                    disabled={isGeneratingVideo}
+                    className="w-full bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingVideo ? 'Generating...' : 'Generate Video'}
+                  </button>
+                  <button
+                    onClick={() => setStep('script')}
+                    className="w-full bg-white hover:bg-gray-100 text-black font-medium py-2 px-4 rounded transition-colors border border-gray-300"
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -273,7 +334,7 @@ export default function ChapterCreator({ world, onClose }) {
           {/* Generating Video */}
           {step === 'generating-video' && (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
               <p className="text-gray-600">Generating video...</p>
             </div>
           )}
@@ -281,14 +342,14 @@ export default function ChapterCreator({ world, onClose }) {
           {/* Complete */}
           {step === 'complete' && (
             <div className="text-center py-8">
-              <div className="text-green-600 text-5xl mb-4">✓</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Video Generation Started!</h3>
+              <div className="text-black text-5xl mb-4">✓</div>
+              <h3 className="text-xl font-semibold text-black mb-2">Video Generation Started!</h3>
               <p className="text-gray-600 mb-6">
                 Your video is being generated. Check back later to see the completed video.
               </p>
               <button
                 onClick={handleClose}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                className="bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
               >
                 Close
               </button>

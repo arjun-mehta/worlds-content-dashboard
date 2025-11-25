@@ -15,9 +15,55 @@ html, body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #ffffff;
+  color: #000000;
 }
 
 #root {
   height: 100%;
   width: 100%;
+}
+
+/* Minimal loading animation for processing status */
+@keyframes processing-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+}
+
+.processing-indicator {
+  animation: processing-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes processing-dots {
+  0%, 20% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+.processing-dot {
+  animation: processing-dots 1.4s ease-in-out infinite;
+}
+
+.processing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.processing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.processing-dot:nth-child(3) {
+  animation-delay: 0.4s;
 }

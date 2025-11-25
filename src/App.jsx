@@ -11,7 +11,7 @@ function App() {
   return (
     <WorldsProvider>
       <VideosProvider>
-        <div className="flex h-screen bg-gray-100">
+        <div className="flex h-screen bg-white">
           <Sidebar onCreateWorld={() => setShowCreateWorldModal(true)} />
           <WorldView />
           {showCreateWorldModal && (
