@@ -543,12 +543,19 @@ if (isProduction) {
   app.use(express.static(distPath));
   
   // Handle React routing - return all requests to React app
-  app.get('*', (req, res) => {
-    // Don't serve index.html for API routes
+  // Express 5 doesn't support '*' wildcard, so we use a regex pattern
+  // This matches all GET requests that don't start with /api
+  app.get(/^(?!\/api).*/, (req, res, next) => {
+    // Skip if it's an API route (shouldn't happen due to regex, but safety check)
     if (req.path.startsWith('/api/')) {
-      return res.status(404).json({ error: 'API endpoint not found' });
+      return next();
     }
-    res.sendFile(join(distPath, 'index.html'));
+    res.sendFile(join(distPath, 'index.html'), (err) => {
+      if (err) {
+        console.error('Error sending index.html:', err);
+        res.status(500).send('Error loading application');
+      }
+    });
   });
 }
 
