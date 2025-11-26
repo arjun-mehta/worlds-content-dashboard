@@ -6,6 +6,7 @@ export const World = {
   author: String,
   elevenLabsVoiceId: String,
   heyGenAvatarId: String,
+  heyGenImageKey: String, // Image key from HeyGen Upload Asset API for Avatar IV videos
   systemPrompt: String,
   createdAt: String,
   updatedAt: String,

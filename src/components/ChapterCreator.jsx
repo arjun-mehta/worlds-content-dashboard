@@ -14,7 +14,7 @@ export default function ChapterCreator({ world, onClose }) {
   
   const [chapterTitle, setChapterTitle] = useState('');
   const [chapterNumber, setChapterNumber] = useState(suggestedChapterNumber.toString());
-  const [avatarId, setAvatarId] = useState(world.heyGenAvatarId || 'Carlotta_BizTalk_Side_public');
+  const [avatarId, setAvatarId] = useState(world.heyGenImageKey || world.heyGenAvatarId || '');
   const [step, setStep] = useState('input'); // 'input' | 'generating' | 'script' | 'generating-audio' | 'audio' | 'generating-video' | 'complete'
   const [script, setScript] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
@@ -48,6 +48,7 @@ export default function ChapterCreator({ world, onClose }) {
       const generatedScript = await generateScript(
         world.systemPrompt,
         chapterTitle,
+        parseInt(chapterNumber),
         world.name
       );
       setScript(generatedScript);
@@ -84,8 +85,10 @@ export default function ChapterCreator({ world, onClose }) {
   };
 
   const handleGenerateVideo = async () => {
-    if (!avatarId.trim()) {
-      setError('Please enter an avatar ID');
+    // Check if we have an image key (either from world or manually entered)
+    const imageKey = world.heyGenImageKey || avatarId;
+    if (!imageKey || !imageKey.trim()) {
+      setError('Please upload an author image in World Details or provide an image key');
       return;
     }
 
@@ -99,8 +102,13 @@ export default function ChapterCreator({ world, onClose }) {
     setStep('generating-video');
 
     try {
-      // Generate video via HeyGen using the audio blob (this uploads audio to Supabase first)
-      const heyGenResponse = await generateVideo(audioBlob, avatarId, chapterTitle);
+      // Generate Avatar IV video via HeyGen using the audio blob and script
+      // Use heyGenImageKey from world if available, otherwise fall back to avatarId
+      const imageKey = world.heyGenImageKey || avatarId;
+      if (!imageKey) {
+        throw new Error('Please upload an author image in World Details or provide an image key');
+      }
+      const heyGenResponse = await generateVideo(audioBlob, imageKey, script, chapterTitle);
       console.log('✅ HeyGen response:', heyGenResponse);
       console.log('✅ Supabase audio URL:', heyGenResponse.audioUrl);
       
@@ -149,7 +157,7 @@ export default function ChapterCreator({ world, onClose }) {
     setScript('');
     setAudioUrl(null);
     setAudioBlob(null);
-    setAvatarId(world.heyGenAvatarId || 'Carlotta_BizTalk_Side_public');
+    setAvatarId(world.heyGenImageKey || world.heyGenAvatarId || '');
     setStep('input');
     setError(null);
     onClose();
@@ -302,15 +310,21 @@ export default function ChapterCreator({ world, onClose }) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-black mb-2">
-                    Avatar ID (HeyGen)
+                    Image Key (optional - uses world's author image if not provided)
                   </label>
                   <input
                     type="text"
                     value={avatarId}
                     onChange={(e) => setAvatarId(e.target.value)}
-                    placeholder="Enter HeyGen avatar ID"
+                    placeholder={world.heyGenImageKey ? `Using world image key: ${world.heyGenImageKey.substring(0, 20)}...` : "Enter HeyGen image key or upload image in World Details"}
                     className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                    disabled={!!world.heyGenImageKey}
                   />
+                  {world.heyGenImageKey && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Using author image from World Details. Clear it there to use a custom image key.
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 mt-auto">
                   <button

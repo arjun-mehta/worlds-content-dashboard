@@ -4,10 +4,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
+import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,7 +53,36 @@ app.use((req, res, next) => {
 });
 
 // Configure multer for file uploads (memory storage)
-const upload = multer({ storage: multer.memoryStorage() });
+// Separate instances for images and audio
+const uploadImage = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit for images
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept image files only
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+const uploadAudio = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit for audio
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept audio files only
+    if (file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed'), false);
+    }
+  }
+});
 
 // Use non-prefixed env vars for server (VITE_ prefix is only for client build)
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY || process.env.VITE_HEYGEN_API_KEY;
@@ -112,7 +143,7 @@ app.get('/api/heygen/avatars', async (req, res) => {
 });
 
 // Upload audio to HeyGen and get asset_id
-app.post('/api/heygen/upload-audio', upload.single('audio'), async (req, res) => {
+app.post('/api/heygen/upload-audio', uploadAudio.single('audio'), async (req, res) => {
   console.log('Upload audio endpoint hit');
   console.log('Request method:', req.method);
   console.log('Has file:', !!req.file);
@@ -332,53 +363,137 @@ app.post('/api/heygen/upload-audio', upload.single('audio'), async (req, res) =>
   }
 });
 
-// Generate video using HeyGen
+// Upload image to HeyGen and get image_key
+// Docs: https://docs.heygen.com/reference/upload-asset
+app.post('/api/heygen/upload-image', uploadImage.single('image'), async (req, res) => {
+  try {
+    if (!HEYGEN_API_KEY) {
+      return res.status(500).json({ error: 'HeyGen API key not configured' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    console.log('Uploading image to HeyGen, size:', req.file.size, 'type:', req.file.mimetype);
+
+    // Upload to HeyGen using Upload Asset API
+    // Endpoint: POST https://upload.heygen.com/v1/asset
+    // Docs: https://docs.heygen.com/reference/upload-asset
+    // 
+    // IMPORTANT: The API expects RAW_BODY - raw binary data in request body
+    // NOT multipart/form-data! Just send the file buffer directly
+    console.log('Sending raw binary data (not form-data)');
+    console.log('File size:', req.file.size, 'bytes');
+    console.log('File type:', req.file.mimetype);
+    console.log('Filename:', req.file.originalname || 'image.jpg');
+    
+    try {
+      const response = await fetch('https://upload.heygen.com/v1/asset', {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': HEYGEN_API_KEY,
+          'Content-Type': req.file.mimetype, // Set Content-Type to the file's MIME type
+        },
+        body: req.file.buffer, // Send raw binary data directly
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HeyGen image upload failed:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText || `HTTP ${response.status}` };
+        }
+        return res.status(response.status).json({ 
+          error: 'Failed to upload image to HeyGen',
+          heyGenError: errorData
+        });
+      }
+
+      const data = await response.json();
+      console.log('HeyGen image upload response:', JSON.stringify(data, null, 2));
+    
+    // Extract image_key from response
+    // Response structure: { data: { image_key: "..." } } or { image_key: "..." }
+    const imageKey = data.data?.image_key || data.image_key;
+    
+    if (!imageKey) {
+      console.error('No image_key in HeyGen response:', data);
+      return res.status(500).json({ 
+        error: 'HeyGen did not return an image_key',
+        response: data
+      });
+    }
+
+      console.log('✅ Image uploaded to HeyGen, image_key:', imageKey);
+      
+      res.json({
+        image_key: imageKey,
+      });
+    } catch (error) {
+      console.error('Error uploading image to HeyGen:', error);
+      return res.status(500).json({ 
+        error: 'Internal server error while uploading image',
+        details: error.message
+      });
+    }
+  } catch (error) {
+    console.error('Error in upload-image endpoint:', error);
+    res.status(500).json({ error: 'Internal server error while uploading image' });
+  }
+});
+
+// Generate video using HeyGen Avatar IV API
+// Docs: https://docs.heygen.com/docs/create-avatar-iv-videos
 app.post('/api/heygen/generate-video', async (req, res) => {
   try {
     if (!HEYGEN_API_KEY) {
       return res.status(500).json({ error: 'HeyGen API key not configured' });
     }
 
-    const { audio_url, avatar_id, avatar_group_id, video_title } = req.body;
+    const { audio_url, image_key, script, video_title, voice_id, custom_motion_prompt } = req.body;
 
-    if (!audio_url || (!avatar_id && !avatar_group_id)) {
-      return res.status(400).json({ error: 'Missing required parameters (audio_url and avatar_id or avatar_group_id)' });
+    // Avatar IV API requires: image_key, script, and either voice_id or audio_url
+    if (!image_key || !script) {
+      return res.status(400).json({ error: 'Missing required parameters: image_key and script are required' });
     }
 
-    console.log('Generating video with:', { video_title, avatar_id, avatar_group_id, audio_url: audio_url.substring(0, 50) + '...' });
-
-    // HeyGen v2 API requires video_inputs array format
-    // In v2, avatar_id should be directly on character, not nested under avatar object!
-    if (!avatar_id || !avatar_id.trim()) {
-      return res.status(400).json({ error: 'avatar_id is required and cannot be empty' });
+    if (!audio_url && !voice_id) {
+      return res.status(400).json({ error: 'Either audio_url or voice_id is required' });
     }
+
+    console.log('Generating Avatar IV video with:', { 
+      video_title, 
+      image_key, 
+      script_length: script.length,
+      has_audio_url: !!audio_url,
+      has_voice_id: !!voice_id,
+      custom_motion_prompt 
+    });
     
-    // Structure for v2: character: { type: 'avatar', avatar_id: '...' }
-    const characterConfig = {
-      type: 'avatar',
-      avatar_id: avatar_id.trim(), // Directly on character, not nested!
-    };
-    
-    // According to HeyGen docs: https://docs.heygen.com/docs/create-video
-    // Free API Plan export resolution limit is 720p
-    // Set resolution using dimension object with width and height
+    // Avatar IV API request body structure
+    // Docs: https://docs.heygen.com/reference/create-avatar-iv-video
     const requestBody = {
+      image_key: image_key.trim(),
       video_title: video_title || 'Generated Video',
-      video_inputs: [
-        {
-          character: characterConfig,
-          voice: {
-            type: 'audio',
-            audio_url: audio_url,
-          },
-        },
-      ],
-      // Set 720p resolution for free plan compatibility
-      dimension: {
-        width: 1280,
-        height: 720
-      },
+      script: script,
     };
+
+    // Use audio_url if provided, otherwise use voice_id (voice_id is required if no audio_url)
+    if (audio_url) {
+      requestBody.audio_url = audio_url;
+    } else {
+      requestBody.voice_id = voice_id;
+    }
+
+    // Optional: Add custom motion prompt for gestures
+    if (custom_motion_prompt) {
+      requestBody.custom_motion_prompt = custom_motion_prompt;
+      requestBody.enhance_custom_motion_prompt = true; // Let AI refine the motion
+    }
 
     console.log('HeyGen request body:', JSON.stringify(requestBody, null, 2));
 
@@ -415,7 +530,10 @@ app.post('/api/heygen/generate-video', async (req, res) => {
     
     let response;
     try {
-      response = await fetch(`${HEYGEN_API_URL}/v2/video/generate`, {
+      // Avatar IV API endpoint
+      // API Reference: https://docs.heygen.com/reference/create-avatar-iv-video
+      // Endpoint: POST https://api.heygen.com/v2/video/av4/generate
+      response = await fetch(`${HEYGEN_API_URL}/v2/video/av4/generate`, {
         method: 'POST',
         headers: {
           'X-Api-Key': HEYGEN_API_KEY,
@@ -438,10 +556,12 @@ app.post('/api/heygen/generate-video', async (req, res) => {
     }
 
     console.log('HeyGen video generation response status:', response.status);
+    console.log('HeyGen API endpoint used:', `${HEYGEN_API_URL}/v2/video/av4/generate`);
     
     if (!response.ok) {
       const errorText = await response.text();
       console.error('HeyGen video generation failed:', errorText);
+      console.error('Response status:', response.status, response.statusText);
       let errorData;
       try {
         errorData = JSON.parse(errorText);
@@ -451,10 +571,12 @@ app.post('/api/heygen/generate-video', async (req, res) => {
       
       // Provide more helpful error messages
       let userMessage = 'Failed to generate video';
-      if (response.status === 502) {
+      if (response.status === 404) {
+        userMessage = 'HeyGen API endpoint not found (404). The Avatar IV endpoint might be incorrect. Please check the HeyGen API documentation: https://docs.heygen.com/reference/create-avatar-iv-video';
+      } else if (response.status === 502) {
         userMessage = 'HeyGen server error (502). This usually means: 1) HeyGen cannot access the audio file URL, 2) HeyGen API is temporarily down, or 3) The audio file format is incompatible. Please try again or check if the audio URL is publicly accessible.';
       } else if (response.status === 400) {
-        userMessage = 'Invalid request to HeyGen. Please check your avatar ID and audio URL.';
+        userMessage = 'Invalid request to HeyGen. Please check your image_key, script, and audio URL.';
       } else if (response.status === 401 || response.status === 403) {
         userMessage = 'HeyGen API authentication failed. Please check your API key.';
       }
@@ -468,9 +590,9 @@ app.post('/api/heygen/generate-video', async (req, res) => {
     }
 
     const data = await response.json();
-    console.log('HeyGen API response:', JSON.stringify(data, null, 2));
+    console.log('HeyGen Avatar IV API response:', JSON.stringify(data, null, 2));
     
-    // HeyGen v2 API response structure might be different
+    // Avatar IV API response structure - extract video_id and status
     const videoId = data.data?.video_id || data.video_id || data.data?.id;
     const status = data.data?.status || data.status || 'processing';
     
@@ -571,6 +693,7 @@ app.listen(serverPort, () => {
   console.log('Available endpoints:');
   console.log('  GET  /api/health');
   console.log('  POST /api/heygen/upload-audio');
+  console.log('  POST /api/heygen/upload-image');
   console.log('  POST /api/heygen/generate-video');
   console.log('  GET  /api/heygen/video-status/:videoId');
   if (process.env.NODE_ENV === 'production') {

@@ -14,8 +14,10 @@ export default function WorldView() {
     author: '',
     elevenLabsVoiceId: '',
     heyGenAvatarId: '',
+    heyGenImageKey: '',
     systemPrompt: '',
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   if (!selectedWorld) {
     return (
@@ -37,6 +39,7 @@ export default function WorldView() {
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
       heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
+      heyGenImageKey: selectedWorld.heyGenImageKey || '',
       systemPrompt: selectedWorld.systemPrompt || '',
     });
     setIsEditingDetails(true);
@@ -54,8 +57,64 @@ export default function WorldView() {
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
       heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
+      heyGenImageKey: selectedWorld.heyGenImageKey || '',
       systemPrompt: selectedWorld.systemPrompt || '',
     });
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image file size must be less than 10MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_URL}/api/heygen/upload-image`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to upload image');
+      }
+
+      const data = await response.json();
+      console.log('✅ Image uploaded to HeyGen, image_key:', data.image_key);
+      
+      // Update the editedFields with the new image_key
+      setEditedFields({
+        ...editedFields,
+        heyGenImageKey: data.image_key,
+      });
+      
+      // Also update the world immediately
+      await updateWorld(selectedWorld.id, {
+        heyGenImageKey: data.image_key,
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert(error.message || 'Failed to upload image to HeyGen');
+    } finally {
+      setUploadingImage(false);
+      // Reset file input
+      event.target.value = '';
+    }
   };
 
   // Helper function to get preview of system prompt
@@ -139,6 +198,29 @@ export default function WorldView() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-black mb-2">
+                  Author Image (for Avatar IV videos)
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-black disabled:opacity-50"
+                  />
+                  {uploadingImage && (
+                    <p className="text-sm text-gray-600">Uploading image to HeyGen...</p>
+                  )}
+                  {editedFields.heyGenImageKey && (
+                    <div className="p-2 bg-gray-50 border border-gray-200 rounded">
+                      <p className="text-xs text-gray-600 mb-1">Image Key:</p>
+                      <p className="text-sm font-mono text-black break-all">{editedFields.heyGenImageKey}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black mb-2">
                   Scripting System Prompt
                 </label>
                 <textarea
@@ -181,6 +263,12 @@ export default function WorldView() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">HeyGen Avatar ID</p>
                   <p className="text-black">{selectedWorld.heyGenAvatarId || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Author Image Key</p>
+                  <p className="text-black font-mono text-xs break-all">
+                    {selectedWorld.heyGenImageKey || '—'}
+                  </p>
                 </div>
               </div>
               <div>

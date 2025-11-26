@@ -33,6 +33,7 @@ export const dbWorlds = {
           author: world.author || '',
           elevenLabsVoiceId: world.eleven_labs_voice_id || '',
           heyGenAvatarId: world.hey_gen_avatar_id || '',
+          heyGenImageKey: world.hey_gen_image_key || '',
           systemPrompt: world.system_prompt || '',
           createdAt: world.created_at,
           updatedAt: world.updated_at,
@@ -60,6 +61,7 @@ export const dbWorlds = {
             author: world.author || '',
             eleven_labs_voice_id: world.elevenLabsVoiceId || '',
             hey_gen_avatar_id: world.heyGenAvatarId || '',
+            hey_gen_image_key: world.heyGenImageKey || '',
             system_prompt: world.systemPrompt || '',
           })
           .select()
@@ -113,6 +115,7 @@ export const dbWorlds = {
           author: updates.author,
           eleven_labs_voice_id: updates.elevenLabsVoiceId,
           hey_gen_avatar_id: updates.heyGenAvatarId,
+          hey_gen_image_key: updates.heyGenImageKey,
           system_prompt: updates.systemPrompt,
           updated_at: new Date().toISOString(),
         };
@@ -147,6 +150,7 @@ export const dbWorlds = {
           author: data.author || '',
           elevenLabsVoiceId: data.eleven_labs_voice_id || '',
           heyGenAvatarId: data.hey_gen_avatar_id || '',
+          heyGenImageKey: data.hey_gen_image_key || '',
           systemPrompt: data.system_prompt || '',
           createdAt: data.created_at,
           updatedAt: data.updated_at,

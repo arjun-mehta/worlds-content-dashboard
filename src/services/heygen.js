@@ -64,27 +64,41 @@ const uploadAudioAsset = async (audioBlob) => {
   }
 };
 
-// Generate video using HeyGen API v2
-export const generateVideo = async (audioBlob, avatarId, videoTitle = 'Generated Video') => {
-  if (!avatarId) {
-    throw new Error('Avatar ID is required for video generation.');
+// Generate video using HeyGen Avatar IV API
+// Docs: https://docs.heygen.com/docs/create-avatar-iv-videos
+export const generateVideo = async (audioBlob, imageKey, script, videoTitle = 'Generated Video', customMotionPrompt = null) => {
+  if (!imageKey) {
+    throw new Error('Image key is required for video generation.');
+  }
+
+  if (!script) {
+    throw new Error('Script is required for video generation.');
   }
 
   try {
     // Step 1: Upload audio to get public URL via backend server
     const audioUrl = await uploadAudioAsset(audioBlob);
 
-    // Step 2: Generate video via backend server using audio_url
+    // Step 2: Generate Avatar IV video via backend server
+    // Avatar IV API requires: image_key, script, and audio_url (or voice_id)
+    const requestBody = {
+      image_key: imageKey,
+      video_title: videoTitle,
+      script: script,
+      audio_url: audioUrl,
+    };
+    
+    // Optional: Add custom motion prompt for gestures
+    if (customMotionPrompt) {
+      requestBody.custom_motion_prompt = customMotionPrompt;
+    }
+    
     const response = await fetch(`${API_URL}/api/heygen/generate-video`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        video_title: videoTitle,
-        avatar_id: avatarId,
-        audio_url: audioUrl, // Use audio_url instead of audio_asset_id
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

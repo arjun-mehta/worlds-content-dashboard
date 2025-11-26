@@ -17,12 +17,12 @@ const getOpenAIClient = () => {
   });
 };
 
-export const generateScript = async (systemPrompt, chapterTitle, bookName) => {
+export const generateScript = async (systemPrompt, chapterTitle, chapterNumber, bookName) => {
   try {
     const openai = getOpenAIClient();
     
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Using cheaper model for MVP
+      model: 'gpt-4o', // Latest and best OpenAI model
       messages: [
         {
           role: 'system',
@@ -30,7 +30,7 @@ export const generateScript = async (systemPrompt, chapterTitle, bookName) => {
         },
         {
           role: 'user',
-          content: `Generate a script for a short-form video chapter titled "${chapterTitle}" for the book "${bookName}". The script should be engaging, concise, and suitable for a video format.`,
+          content: `Generate a script for Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookName}". The script should be engaging, concise, and suitable for a short-form video format.`,
         },
       ],
       temperature: 0.7,

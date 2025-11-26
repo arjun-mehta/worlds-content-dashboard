@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS worlds (
   author TEXT DEFAULT '',
   eleven_labs_voice_id TEXT DEFAULT '',
   hey_gen_avatar_id TEXT DEFAULT '',
+  hey_gen_image_key TEXT DEFAULT '', -- Image key from HeyGen Upload Asset API for Avatar IV videos
   system_prompt TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
