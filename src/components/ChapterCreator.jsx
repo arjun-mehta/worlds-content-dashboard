@@ -14,7 +14,7 @@ export default function ChapterCreator({ world, onClose }) {
   
   const [chapterTitle, setChapterTitle] = useState('');
   const [chapterNumber, setChapterNumber] = useState(suggestedChapterNumber.toString());
-  const [avatarId, setAvatarId] = useState(world.heyGenImageKey || world.heyGenAvatarId || '');
+  const [avatarId, setAvatarId] = useState(''); // Deprecated: kept for backward compatibility but not used (Avatar IV uses image_key)
   const [step, setStep] = useState('input'); // 'input' | 'generating' | 'script' | 'generating-audio' | 'audio' | 'generating-video' | 'complete'
   const [script, setScript] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
@@ -85,11 +85,11 @@ export default function ChapterCreator({ world, onClose }) {
   };
 
   const handleGenerateVideo = async () => {
-    // Check if we have at least one image key
+    // Check if we have at least one image key (Avatar IV requires image_key, not avatar_id)
     const imageKeys = [
-      world.heyGenImageKey1 || world.heyGenImageKey || avatarId,
-      world.heyGenImageKey2 || world.heyGenImageKey || avatarId,
-      world.heyGenImageKey3 || world.heyGenImageKey || avatarId,
+      world.heyGenImageKey1 || world.heyGenImageKey || '',
+      world.heyGenImageKey2 || world.heyGenImageKey || '',
+      world.heyGenImageKey3 || world.heyGenImageKey || '',
     ];
     
     const hasAtLeastOneImage = imageKeys.some(key => key && key.trim());
@@ -182,7 +182,7 @@ export default function ChapterCreator({ world, onClose }) {
     setScript('');
     setAudioUrl(null);
     setAudioBlob(null);
-    setAvatarId(world.heyGenImageKey || world.heyGenAvatarId || '');
+    // avatarId is deprecated - Avatar IV uses image_key instead
     setStep('input');
     setError(null);
     onClose();
@@ -334,22 +334,9 @@ export default function ChapterCreator({ world, onClose }) {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-black mb-2">
-                    Image Key (optional - uses world's author image if not provided)
-                  </label>
-                  <input
-                    type="text"
-                    value={avatarId}
-                    onChange={(e) => setAvatarId(e.target.value)}
-                    placeholder={world.heyGenImageKey ? `Using world image key: ${world.heyGenImageKey.substring(0, 20)}...` : "Enter HeyGen image key or upload image in World Details"}
-                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-                    disabled={!!world.heyGenImageKey}
-                  />
-                  {world.heyGenImageKey && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Using author image from World Details. Clear it there to use a custom image key.
-                    </p>
-                  )}
+                  <p className="text-sm text-gray-600">
+                    Videos will use the 3 author images uploaded in World Details. Make sure all 3 angles are uploaded before generating videos.
+                  </p>
                 </div>
                 <div className="flex flex-col gap-2 mt-auto">
                   <button

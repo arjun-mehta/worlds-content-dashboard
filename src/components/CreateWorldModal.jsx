@@ -6,7 +6,6 @@ export default function CreateWorldModal({ onClose }) {
   const [name, setName] = useState('');
   const [author, setAuthor] = useState('');
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState('');
-  const [heyGenAvatarId, setHeyGenAvatarId] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [error, setError] = useState(null);
 
@@ -16,7 +15,7 @@ export default function CreateWorldModal({ onClose }) {
       return;
     }
 
-    createWorld(name, author, elevenLabsVoiceId, heyGenAvatarId, systemPrompt);
+    createWorld(name, author, elevenLabsVoiceId, '', systemPrompt); // heyGenAvatarId deprecated - Avatar IV uses image_key
     onClose();
   };
 
@@ -85,18 +84,6 @@ export default function CreateWorldModal({ onClose }) {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-black mb-2">
-                HeyGen Avatar ID
-              </label>
-              <input
-                type="text"
-                value={heyGenAvatarId}
-                onChange={(e) => setHeyGenAvatarId(e.target.value)}
-                placeholder="Enter HeyGen avatar ID"
-                className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-              />
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-black mb-2">

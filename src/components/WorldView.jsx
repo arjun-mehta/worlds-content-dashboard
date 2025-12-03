@@ -42,7 +42,6 @@ export default function WorldView() {
       name: selectedWorld.name || '',
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
-      heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
       heyGenImageKey: selectedWorld.heyGenImageKey || '', // Deprecated, kept for backward compatibility
       heyGenImageKey1: selectedWorld.heyGenImageKey1 || '',
       heyGenImageKey2: selectedWorld.heyGenImageKey2 || '',
@@ -63,7 +62,6 @@ export default function WorldView() {
       name: selectedWorld.name || '',
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
-      heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
       heyGenImageKey: selectedWorld.heyGenImageKey || '', // Deprecated, kept for backward compatibility
       heyGenImageKey1: selectedWorld.heyGenImageKey1 || '',
       heyGenImageKey2: selectedWorld.heyGenImageKey2 || '',
@@ -197,17 +195,6 @@ export default function WorldView() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-black mb-2">
-                  HeyGen Avatar ID
-                </label>
-                <input
-                  type="text"
-                  value={editedFields.heyGenAvatarId}
-                  onChange={(e) => setEditedFields({ ...editedFields, heyGenAvatarId: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
                   Author Images (3 angles for Avatar IV videos)
                 </label>
                 <div className="space-y-4">
@@ -287,10 +274,6 @@ export default function WorldView() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">ElevenLabs Voice ID</p>
                   <p className="text-black">{selectedWorld.elevenLabsVoiceId || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">HeyGen Avatar ID</p>
-                  <p className="text-black">{selectedWorld.heyGenAvatarId || '—'}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-sm font-medium text-gray-600 mb-2">Author Image Keys (3 angles)</p>
