@@ -160,74 +160,88 @@ export default function WorldView() {
 
           {isEditingDetails ? (
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Book Name
-                </label>
-                <input
-                  type="text"
-                  value={editedFields.name}
-                  onChange={(e) => setEditedFields({ ...editedFields, name: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-                />
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Book Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editedFields.name}
+                    onChange={(e) => setEditedFields({ ...editedFields, name: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    Author
+                  </label>
+                  <input
+                    type="text"
+                    value={editedFields.author}
+                    onChange={(e) => setEditedFields({ ...editedFields, author: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-black mb-2">
+                    ElevenLabs Voice ID
+                  </label>
+                  <input
+                    type="text"
+                    value={editedFields.elevenLabsVoiceId}
+                    onChange={(e) => setEditedFields({ ...editedFields, elevenLabsVoiceId: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  Author
-                </label>
-                <input
-                  type="text"
-                  value={editedFields.author}
-                  onChange={(e) => setEditedFields({ ...editedFields, author: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
-                  ElevenLabs Voice ID
-                </label>
-                <input
-                  type="text"
-                  value={editedFields.elevenLabsVoiceId}
-                  onChange={(e) => setEditedFields({ ...editedFields, elevenLabsVoiceId: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className="block text-sm font-medium text-black mb-3">
                   Author Images (3 angles for Avatar IV videos)
                 </label>
-                <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
                   {[1, 2, 3].map((angle) => {
                     const imageKeyField = `heyGenImageKey${angle}`;
                     const angleKey = `angle${angle}`;
+                    const hasImage = editedFields[imageKeyField];
                     return (
-                      <div key={angle} className="border border-gray-300 rounded p-3">
-                        <label className="block text-xs font-medium text-gray-600 mb-2">
-                          Angle {angle}
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(e, angle)}
-                          disabled={uploadingImage[angleKey]}
-                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-black disabled:opacity-50"
-                        />
-                        {uploadingImage[angleKey] && (
-                          <p className="text-sm text-gray-600 mt-1">Uploading image {angle} to HeyGen...</p>
-                        )}
-                        {editedFields[imageKeyField] && (
-                          <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
-                            <p className="text-xs text-gray-600 mb-1">Image Key:</p>
-                            <p className="text-sm font-mono text-black break-all">{editedFields[imageKeyField]}</p>
-                            {editedFields[imageKeyField].startsWith('image/') && (
-                              <img
-                                src={`https://resource2.heygen.ai/${editedFields[imageKeyField]}`}
-                                alt={`Author Angle ${angle}`}
-                                className="mt-2 max-h-24 rounded"
-                              />
-                            )}
+                      <div key={angle} className="border border-gray-300 rounded-lg p-4 bg-white hover:border-gray-400 transition-colors">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-black">Angle {angle}</span>
+                          {hasImage && (
+                            <span className="text-xs text-green-600 font-medium">✓ Uploaded</span>
+                          )}
+                        </div>
+                        {hasImage && editedFields[imageKeyField].startsWith('image/') ? (
+                          <div className="mb-3">
+                            <img
+                              src={`https://resource2.heygen.ai/${editedFields[imageKeyField]}`}
+                              alt={`Author Angle ${angle}`}
+                              className="w-full rounded border border-gray-200"
+                              style={{ maxHeight: '200px', objectFit: 'contain' }}
+                            />
                           </div>
+                        ) : (
+                          <div className="mb-3 h-32 bg-gray-50 border-2 border-dashed border-gray-300 rounded flex items-center justify-center">
+                            <span className="text-xs text-gray-400">No image</span>
+                          </div>
+                        )}
+                        <label className="block">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, angle)}
+                            disabled={uploadingImage[angleKey]}
+                            className="w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-black file:text-white hover:file:bg-gray-800 file:cursor-pointer disabled:opacity-50 cursor-pointer"
+                          />
+                        </label>
+                        {uploadingImage[angleKey] && (
+                          <p className="text-xs text-gray-500 mt-2">Uploading...</p>
+                        )}
+                        {hasImage && (
+                          <p className="text-xs text-gray-500 mt-2 font-mono truncate" title={editedFields[imageKeyField]}>
+                            {editedFields[imageKeyField].substring(0, 20)}...
+                          </p>
                         )}
                       </div>
                     );
@@ -262,7 +276,7 @@ export default function WorldView() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Book</p>
                   <p className="text-black">{selectedWorld.name || '—'}</p>
@@ -276,22 +290,34 @@ export default function WorldView() {
                   <p className="text-black">{selectedWorld.elevenLabsVoiceId || '—'}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-sm font-medium text-gray-600 mb-2">Author Image Keys (3 angles)</p>
-                  <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-600 mb-3">Author Images (3 angles)</p>
+                  <div className="grid grid-cols-3 gap-4">
                     {[1, 2, 3].map((angle) => {
                       const imageKey = selectedWorld[`heyGenImageKey${angle}`] || '';
                       return (
-                        <div key={angle} className="p-2 bg-gray-50 border border-gray-200 rounded">
-                          <p className="text-xs font-medium text-gray-600">Angle {angle}:</p>
-                          <p className="text-black font-mono text-xs break-all">
-                            {imageKey || '—'}
-                          </p>
-                          {imageKey && imageKey.startsWith('image/') && (
+                        <div key={angle} className="border border-gray-300 rounded-lg p-3 bg-white">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-gray-600">Angle {angle}</span>
+                            {imageKey && (
+                              <span className="text-xs text-green-600 font-medium">✓</span>
+                            )}
+                          </div>
+                          {imageKey && imageKey.startsWith('image/') ? (
                             <img
                               src={`https://resource2.heygen.ai/${imageKey}`}
                               alt={`Author Angle ${angle}`}
-                              className="mt-2 max-h-20 rounded"
+                              className="w-full rounded border border-gray-200 mb-2"
+                              style={{ maxHeight: '200px', objectFit: 'contain' }}
                             />
+                          ) : (
+                            <div className="h-28 bg-gray-50 border-2 border-dashed border-gray-300 rounded flex items-center justify-center mb-2">
+                              <span className="text-xs text-gray-400">No image</span>
+                            </div>
+                          )}
+                          {imageKey && (
+                            <p className="text-xs text-gray-500 font-mono truncate" title={imageKey}>
+                              {imageKey.substring(0, 18)}...
+                            </p>
                           )}
                         </div>
                       );
