@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import JSZip from 'jszip';
 import { useWorlds } from '../contexts/WorldsContext';
 import { useVideos } from '../contexts/VideosContext';
 import { API_URL } from '../config';
@@ -36,6 +37,107 @@ export default function WorldView() {
 
   const videos = getVideosByWorldId(selectedWorld.id);
   console.log('📹 Videos for world', selectedWorld.id, ':', videos.length, videos);
+
+  // Helper function to sanitize filenames
+  const sanitizeFilename = (str) => {
+    return str
+      .replace(/[^a-z0-9]/gi, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  };
+
+  // Helper function to generate video filename: world_chapter#_chaptertitle_angle
+  const getVideoFilename = (video) => {
+    const world = sanitizeFilename(selectedWorld.name || 'world');
+    const chapterNum = video.chapterNumber || '';
+    const chapterTitle = sanitizeFilename(video.chapterTitle || 'chapter');
+    const angle = video.angle || 1;
+    return `${world}_${chapterNum}_${chapterTitle}_${angle}.mp4`;
+  };
+
+  // Helper function to generate audio filename: world_chapter#_chaptertitle
+  const getAudioFilename = (video) => {
+    const world = sanitizeFilename(selectedWorld.name || 'world');
+    const chapterNum = video.chapterNumber || '';
+    const chapterTitle = sanitizeFilename(video.chapterTitle || 'chapter');
+    return `${world}_${chapterNum}_${chapterTitle}.mp3`;
+  };
+
+  const handleDownloadAllWorldVideos = async () => {
+    const completedVideos = videos.filter(v => v.heyGenStatus === 'completed' && v.videoUrl);
+    if (completedVideos.length === 0) {
+      alert('No completed videos available to download for this world.');
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      
+      // Group videos by chapter
+      const videosByChapter = completedVideos.reduce((acc, video) => {
+        const chapterKey = `${video.chapterNumber}-${video.chapterTitle}`;
+        if (!acc[chapterKey]) {
+          acc[chapterKey] = {
+            chapterNumber: video.chapterNumber,
+            chapterTitle: video.chapterTitle,
+            videos: [],
+            audioUrl: null,
+          };
+        }
+        acc[chapterKey].videos.push(video);
+        // Store audio URL from first video (all videos in a chapter share the same audio)
+        if (!acc[chapterKey].audioUrl && video.audioUrl) {
+          acc[chapterKey].audioUrl = video.audioUrl;
+        }
+        return acc;
+      }, {});
+
+      // Add videos and audio for each chapter in chapter folders
+      for (const chapter of Object.values(videosByChapter)) {
+        // Create folder name for this chapter
+        const chapterFolderName = `Chapter_${chapter.chapterNumber}_${sanitizeFilename(chapter.chapterTitle)}`;
+        
+        // Add all videos for this chapter to the chapter folder
+        for (const video of chapter.videos) {
+          try {
+            const response = await fetch(video.videoUrl);
+            const blob = await response.blob();
+            const filename = getVideoFilename(video);
+            zip.file(`${chapterFolderName}/${filename}`, blob);
+          } catch (error) {
+            console.error(`Error downloading video for chapter ${chapter.chapterNumber}, angle ${video.angle}:`, error);
+          }
+        }
+
+        // Add audio file for this chapter (once per chapter) to the chapter folder
+        if (chapter.audioUrl && chapter.videos.length > 0) {
+          try {
+            const response = await fetch(chapter.audioUrl);
+            const blob = await response.blob();
+            const filename = getAudioFilename(chapter.videos[0]);
+            zip.file(`${chapterFolderName}/${filename}`, blob);
+          } catch (error) {
+            console.error(`Error downloading audio for chapter ${chapter.chapterNumber}:`, error);
+          }
+        }
+      }
+
+      // Generate the zip file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipUrl = window.URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = zipUrl;
+      const worldName = sanitizeFilename(selectedWorld.name || 'world');
+      link.download = `${worldName}_all_chapters.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(zipUrl);
+    } catch (error) {
+      console.error('Error creating zip file:', error);
+      alert('Failed to create zip file. Please try downloading chapters individually.');
+    }
+  };
 
   const handleStartEdit = () => {
     setEditedFields({
@@ -339,12 +441,23 @@ export default function WorldView() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-semibold text-black">Chapters / Videos</h2>
-            <button
-              onClick={() => setShowChapterCreator(true)}
-              className="bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
-            >
-              + Create New Chapter
-            </button>
+            <div className="flex items-center gap-3">
+              {videos.some(v => v.heyGenStatus === 'completed' && v.videoUrl) && (
+                <button
+                  onClick={handleDownloadAllWorldVideos}
+                  className="text-sm text-black hover:text-gray-600 underline"
+                  title="Download all completed videos and audio for this world"
+                >
+                  ↓ Download All
+                </button>
+              )}
+              <button
+                onClick={() => setShowChapterCreator(true)}
+                className="bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
+              >
+                + Create New Chapter
+              </button>
+            </div>
           </div>
           <VideosList videos={videos} worldName={selectedWorld.name} />
         </div>
