@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useWorlds } from '../contexts/WorldsContext';
 import { useVideos } from '../contexts/VideosContext';
+import { API_URL } from '../config';
 import VideosList from './VideosList';
 import ChapterCreator from './ChapterCreator';
 
@@ -93,7 +94,6 @@ export default function WorldView() {
       const formData = new FormData();
       formData.append('image', file);
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/heygen/upload-image`, {
         method: 'POST',
         body: formData,
