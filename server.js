@@ -480,6 +480,7 @@ app.post('/api/heygen/generate-video', async (req, res) => {
       image_key: image_key.trim(),
       video_title: video_title || 'Generated Video',
       script: script,
+      video_orientation: 'portrait', // 9:16 vertical format
     };
 
     // Use audio_url if provided, otherwise use voice_id (voice_id is required if no audio_url)
