@@ -1,9 +1,36 @@
 import { useState } from 'react';
+import JSZip from 'jszip';
 import { useVideos } from '../contexts/VideosContext';
 
-export default function VideosList({ videos }) {
+export default function VideosList({ videos, worldName = '' }) {
   const { deleteVideo, refreshVideoStatus } = useVideos();
   const [refreshingId, setRefreshingId] = useState(null);
+  const [expandedChapters, setExpandedChapters] = useState(new Set()); // Track which chapters are expanded
+
+  // Helper function to sanitize filenames (remove special characters, replace spaces with underscores)
+  const sanitizeFilename = (str) => {
+    return str
+      .replace(/[^a-z0-9]/gi, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  };
+
+  // Helper function to generate video filename: world_chapter#_chaptertitle_angle
+  const getVideoFilename = (video) => {
+    const world = sanitizeFilename(worldName || 'world');
+    const chapterNum = video.chapterNumber || '';
+    const chapterTitle = sanitizeFilename(video.chapterTitle || 'chapter');
+    const angle = video.angle || 1;
+    return `${world}_${chapterNum}_${chapterTitle}_${angle}.mp4`;
+  };
+
+  // Helper function to generate audio filename: world_chapter#_chaptertitle
+  const getAudioFilename = (video) => {
+    const world = sanitizeFilename(worldName || 'world');
+    const chapterNum = video.chapterNumber || '';
+    const chapterTitle = sanitizeFilename(video.chapterTitle || 'chapter');
+    return `${world}_${chapterNum}_${chapterTitle}.mp3`;
+  };
 
   const downloadFile = async (url, filename) => {
     try {
@@ -26,16 +53,84 @@ export default function VideosList({ videos }) {
 
   const handleDownloadAudio = (video) => {
     if (video.audioUrl) {
-      const filename = `${video.chapterTitle || 'audio'}-${video.id}.mp3`;
+      const filename = getAudioFilename(video);
       downloadFile(video.audioUrl, filename);
     }
   };
 
   const handleDownloadVideo = (video) => {
     if (video.videoUrl) {
-      const filename = `${video.chapterTitle || 'video'}-${video.id}.mp4`;
+      const filename = getVideoFilename(video);
       downloadFile(video.videoUrl, filename);
     }
+  };
+
+  const handleDownloadAllVideos = async (chapterVideos) => {
+    const completedVideos = chapterVideos.filter(v => v.heyGenStatus === 'completed' && v.videoUrl);
+    if (completedVideos.length === 0) {
+      alert('No completed videos available to download for this chapter.');
+      return;
+    }
+
+    // Get the audio URL from the first video (all videos share the same audio)
+    const firstVideo = chapterVideos[0];
+    const audioUrl = firstVideo?.audioUrl;
+    const chapterTitle = firstVideo?.chapterTitle || 'Chapter';
+    const chapterNumber = firstVideo?.chapterNumber || '';
+
+    try {
+      const zip = new JSZip();
+      
+      // Add all completed videos to the zip with proper naming
+      for (const video of completedVideos) {
+        try {
+          const response = await fetch(video.videoUrl);
+          const blob = await response.blob();
+          const filename = getVideoFilename(video);
+          zip.file(filename, blob);
+        } catch (error) {
+          console.error(`Error downloading video for angle ${video.angle}:`, error);
+        }
+      }
+
+      // Add the audio file if available with proper naming
+      if (audioUrl && firstVideo) {
+        try {
+          const response = await fetch(audioUrl);
+          const blob = await response.blob();
+          const filename = getAudioFilename(firstVideo);
+          zip.file(filename, blob);
+        } catch (error) {
+          console.error('Error downloading audio:', error);
+        }
+      }
+
+      // Generate the zip file with proper naming
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipUrl = window.URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = zipUrl;
+      const world = sanitizeFilename(worldName || 'world');
+      const chapterTitleSanitized = sanitizeFilename(chapterTitle);
+      link.download = `${world}_${chapterNumber}_${chapterTitleSanitized}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(zipUrl);
+    } catch (error) {
+      console.error('Error creating zip file:', error);
+      alert('Failed to create zip file. Please try downloading files individually.');
+    }
+  };
+
+  const toggleChapter = (chapterKey) => {
+    const newExpanded = new Set(expandedChapters);
+    if (newExpanded.has(chapterKey)) {
+      newExpanded.delete(chapterKey);
+    } else {
+      newExpanded.add(chapterKey);
+    }
+    setExpandedChapters(newExpanded);
   };
 
   if (videos.length === 0) {
@@ -46,149 +141,224 @@ export default function VideosList({ videos }) {
     );
   }
 
-  // Sort videos by chapter number
-  const sortedVideos = [...videos].sort((a, b) => {
-    const chapterA = a.chapterNumber || 0;
-    const chapterB = b.chapterNumber || 0;
-    return chapterA - chapterB;
+  // Group videos by chapter (chapterNumber + chapterTitle)
+  const groupedVideos = videos.reduce((acc, video) => {
+    const chapterKey = `${video.chapterNumber}-${video.chapterTitle}`;
+    if (!acc[chapterKey]) {
+      acc[chapterKey] = {
+        chapterNumber: video.chapterNumber,
+        chapterTitle: video.chapterTitle,
+        videos: [],
+      };
+    }
+    acc[chapterKey].videos.push(video);
+    return acc;
+  }, {});
+
+  // Sort chapters by chapter number
+  const sortedChapters = Object.values(groupedVideos).sort((a, b) => {
+    return (a.chapterNumber || 0) - (b.chapterNumber || 0);
+  });
+
+  // Sort videos within each chapter by angle
+  sortedChapters.forEach(chapter => {
+    chapter.videos.sort((a, b) => (a.angle || 1) - (b.angle || 1));
   });
 
   return (
     <div className="bg-white border border-gray-300 rounded overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-300">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Chapter</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Title</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Status</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Created</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-black uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {sortedVideos.map((video) => {
-            console.log('🎬 Rendering video:', video.id, 'status:', video.heyGenStatus, 'videoUrl:', video.videoUrl);
-            return (
-              <tr key={video.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 text-sm text-black">
-                  {video.chapterNumber}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-black">
-                  {video.chapterTitle}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border ${
-                      video.heyGenStatus === 'completed' ? 'bg-white text-black border-green-500' :
-                      video.heyGenStatus === 'processing' ? 'bg-white text-black border-yellow-500' :
-                      video.heyGenStatus === 'failed' ? 'bg-black text-white border-black' :
-                      'bg-gray-100 text-black border-gray-400'
-                    }`}>
-                      {video.heyGenStatus === 'processing' && (
-                        <span className="inline-flex items-center gap-0.5">
-                          <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
-                          <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
-                          <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
-                        </span>
-                      )}
-                      {video.heyGenStatus}
+      <div className="divide-y divide-gray-200">
+        {sortedChapters.map((chapter) => {
+          const chapterKey = `${chapter.chapterNumber}-${chapter.chapterTitle}`;
+          const isExpanded = expandedChapters.has(chapterKey);
+          const allCompleted = chapter.videos.every(v => v.heyGenStatus === 'completed');
+          const hasCompletedVideos = chapter.videos.some(v => v.heyGenStatus === 'completed' && v.videoUrl);
+          const hasAudio = chapter.videos.some(v => v.audioUrl);
+
+          return (
+            <div key={chapterKey} className="bg-white">
+              {/* Chapter Header - Always Visible */}
+              <div 
+                className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer flex items-center justify-between"
+                onClick={() => toggleChapter(chapterKey)}
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <svg
+                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-black">
+                      Chapter {chapter.chapterNumber}
                     </span>
-                    {video.heyGenVideoId && (video.heyGenStatus === 'processing' || video.heyGenStatus === 'pending') && (
-                      <button
-                        onClick={async () => {
-                          if (refreshingId === video.id) return;
-                          setRefreshingId(video.id);
-                          try {
-                            await refreshVideoStatus(video.id, video.heyGenVideoId);
-                          } catch (error) {
-                            console.error('Failed to refresh:', error);
-                          } finally {
-                            setRefreshingId(null);
-                          }
-                        }}
-                        disabled={refreshingId === video.id}
-                        className="text-black hover:text-gray-600 disabled:opacity-50 transition-transform disabled:animate-spin"
-                        title="Check if video is ready"
-                      >
-                        <svg 
-                          className={`w-3.5 h-3.5 ${refreshingId === video.id ? 'animate-spin' : ''}`}
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            strokeWidth={2} 
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-                          />
-                        </svg>
-                      </button>
-                    )}
+                    <span className="text-sm text-black">
+                      {chapter.chapterTitle}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({chapter.videos.length} {chapter.videos.length === 1 ? 'video' : 'videos'})
+                    </span>
                   </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
-                  {new Date(video.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {video.heyGenStatus === 'completed' && (
-                      <>
-                        {video.videoUrl && (
-                          <>
-                            <a
-                              href={video.videoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-black hover:text-gray-600 text-sm underline"
-                            >
-                              View
-                            </a>
-                            <button
-                              onClick={() => handleDownloadVideo(video)}
-                              className="text-black hover:text-gray-600 text-sm underline"
-                              title="Download video"
-                            >
-                              ↓ Video
-                            </button>
-                          </>
-                        )}
-                        {video.audioUrl && (
-                          <button
-                            onClick={() => handleDownloadAudio(video)}
-                            className="text-black hover:text-gray-600 text-sm underline"
-                            title="Download audio"
-                          >
-                            ↓ Audio
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {video.videoUrl && video.heyGenStatus !== 'completed' && (
-                      <a
-                        href={video.videoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-black hover:text-gray-600 text-sm underline"
-                      >
-                        View
-                      </a>
-                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Download All button - always visible if has completed videos */}
+                  {hasCompletedVideos && (
                     <button
-                      onClick={() => deleteVideo(video.id)}
-                      className="text-black hover:text-gray-600 text-sm underline"
-                      title="Delete video"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadAllVideos(chapter.videos);
+                      }}
+                      className="text-xs text-black hover:text-gray-600 underline px-2 py-1"
+                      title="Download all videos and audio as a zip file"
                     >
-                      Delete
+                      ↓ Download All
                     </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  )}
+                </div>
+              </div>
+
+              {/* Chapter Content - Expandable */}
+              {isExpanded && (
+                <div className="bg-gray-50 border-t border-gray-200">
+                  <table className="w-full">
+                    <thead className="bg-gray-100 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase tracking-wider">Angle</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase tracking-wider">Created</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-black uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {chapter.videos.map((video) => {
+                        return (
+                          <tr key={video.id} className="hover:bg-white transition-colors">
+                            <td className="px-4 py-2 text-sm text-black">
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-300 font-medium">
+                                {video.angle || 1}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border ${
+                                  video.heyGenStatus === 'completed' ? 'bg-white text-black border-green-500' :
+                                  video.heyGenStatus === 'processing' ? 'bg-white text-black border-yellow-500' :
+                                  video.heyGenStatus === 'failed' ? 'bg-black text-white border-black' :
+                                  'bg-gray-100 text-black border-gray-400'
+                                }`}>
+                                  {video.heyGenStatus === 'processing' && (
+                                    <span className="inline-flex items-center gap-0.5">
+                                      <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
+                                      <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
+                                      <span className="processing-dot inline-block w-1 h-1 rounded-full bg-yellow-500"></span>
+                                    </span>
+                                  )}
+                                  {video.heyGenStatus}
+                                </span>
+                                {video.heyGenVideoId && (video.heyGenStatus === 'processing' || video.heyGenStatus === 'pending') && (
+                                  <button
+                                    onClick={async () => {
+                                      if (refreshingId === video.id) return;
+                                      setRefreshingId(video.id);
+                                      try {
+                                        await refreshVideoStatus(video.id, video.heyGenVideoId);
+                                      } catch (error) {
+                                        console.error('Failed to refresh:', error);
+                                      } finally {
+                                        setRefreshingId(null);
+                                      }
+                                    }}
+                                    disabled={refreshingId === video.id}
+                                    className="text-black hover:text-gray-600 disabled:opacity-50 transition-transform disabled:animate-spin"
+                                    title="Check if video is ready"
+                                  >
+                                    <svg 
+                                      className={`w-3.5 h-3.5 ${refreshingId === video.id ? 'animate-spin' : ''}`}
+                                      fill="none" 
+                                      stroke="currentColor" 
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path 
+                                        strokeLinecap="round" 
+                                        strokeLinejoin="round" 
+                                        strokeWidth={2} 
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                                      />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-600">
+                              {new Date(video.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                {video.heyGenStatus === 'completed' && (
+                                  <>
+                                    {video.videoUrl && (
+                                      <>
+                                        <a
+                                          href={video.videoUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-black hover:text-gray-600 text-xs underline"
+                                        >
+                                          View
+                                        </a>
+                                        <button
+                                          onClick={() => handleDownloadVideo(video)}
+                                          className="text-black hover:text-gray-600 text-xs underline"
+                                          title="Download video"
+                                        >
+                                          ↓ Video
+                                        </button>
+                                      </>
+                                    )}
+                                    {video.audioUrl && (
+                                      <button
+                                        onClick={() => handleDownloadAudio(video)}
+                                        className="text-black hover:text-gray-600 text-xs underline"
+                                        title="Download audio"
+                                      >
+                                        ↓ Audio
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                {video.videoUrl && video.heyGenStatus !== 'completed' && (
+                                  <a
+                                    href={video.videoUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-black hover:text-gray-600 text-xs underline"
+                                  >
+                                    View
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => deleteVideo(video.id)}
+                                  className="text-black hover:text-gray-600 text-xs underline"
+                                  title="Delete video"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
-

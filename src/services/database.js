@@ -33,7 +33,10 @@ export const dbWorlds = {
           author: world.author || '',
           elevenLabsVoiceId: world.eleven_labs_voice_id || '',
           heyGenAvatarId: world.hey_gen_avatar_id || '',
-          heyGenImageKey: world.hey_gen_image_key || '',
+          heyGenImageKey: world.hey_gen_image_key || '', // Deprecated, kept for backward compatibility
+          heyGenImageKey1: world.hey_gen_image_key_1 || '',
+          heyGenImageKey2: world.hey_gen_image_key_2 || '',
+          heyGenImageKey3: world.hey_gen_image_key_3 || '',
           systemPrompt: world.system_prompt || '',
           createdAt: world.created_at,
           updatedAt: world.updated_at,
@@ -61,7 +64,10 @@ export const dbWorlds = {
             author: world.author || '',
             eleven_labs_voice_id: world.elevenLabsVoiceId || '',
             hey_gen_avatar_id: world.heyGenAvatarId || '',
-            hey_gen_image_key: world.heyGenImageKey || '',
+            hey_gen_image_key: world.heyGenImageKey || '', // Deprecated, kept for backward compatibility
+            hey_gen_image_key_1: world.heyGenImageKey1 || '',
+            hey_gen_image_key_2: world.heyGenImageKey2 || '',
+            hey_gen_image_key_3: world.heyGenImageKey3 || '',
             system_prompt: world.systemPrompt || '',
           })
           .select()
@@ -83,6 +89,10 @@ export const dbWorlds = {
           author: data.author || '',
           elevenLabsVoiceId: data.eleven_labs_voice_id || '',
           heyGenAvatarId: data.hey_gen_avatar_id || '',
+          heyGenImageKey: data.hey_gen_image_key || '', // Deprecated, kept for backward compatibility
+          heyGenImageKey1: data.hey_gen_image_key_1 || '',
+          heyGenImageKey2: data.hey_gen_image_key_2 || '',
+          heyGenImageKey3: data.hey_gen_image_key_3 || '',
           systemPrompt: data.system_prompt || '',
           createdAt: data.created_at,
           updatedAt: data.updated_at,
@@ -115,7 +125,10 @@ export const dbWorlds = {
           author: updates.author,
           eleven_labs_voice_id: updates.elevenLabsVoiceId,
           hey_gen_avatar_id: updates.heyGenAvatarId,
-          hey_gen_image_key: updates.heyGenImageKey,
+          hey_gen_image_key: updates.heyGenImageKey, // Deprecated, kept for backward compatibility
+          hey_gen_image_key_1: updates.heyGenImageKey1,
+          hey_gen_image_key_2: updates.heyGenImageKey2,
+          hey_gen_image_key_3: updates.heyGenImageKey3,
           system_prompt: updates.systemPrompt,
           updated_at: new Date().toISOString(),
         };
@@ -150,7 +163,10 @@ export const dbWorlds = {
           author: data.author || '',
           elevenLabsVoiceId: data.eleven_labs_voice_id || '',
           heyGenAvatarId: data.hey_gen_avatar_id || '',
-          heyGenImageKey: data.hey_gen_image_key || '',
+          heyGenImageKey: data.hey_gen_image_key || '', // Deprecated, kept for backward compatibility
+          heyGenImageKey1: data.hey_gen_image_key_1 || '',
+          heyGenImageKey2: data.hey_gen_image_key_2 || '',
+          heyGenImageKey3: data.hey_gen_image_key_3 || '',
           systemPrompt: data.system_prompt || '',
           createdAt: data.created_at,
           updatedAt: data.updated_at,
@@ -232,6 +248,7 @@ export const dbVideos = {
           worldId: video.world_id,
           chapterTitle: video.chapter_title,
           chapterNumber: video.chapter_number,
+          angle: video.angle || 1, // Default to 1 if not set
           script: video.script || '',
           audioUrl: video.audio_url,
           heyGenVideoId: video.hey_gen_video_id,
@@ -272,6 +289,7 @@ export const dbVideos = {
           worldId: video.world_id,
           chapterTitle: video.chapter_title,
           chapterNumber: video.chapter_number,
+          angle: video.angle || 1, // Default to 1 if not set
           script: video.script || '',
           audioUrl: video.audio_url,
           heyGenVideoId: video.hey_gen_video_id,
@@ -302,6 +320,7 @@ export const dbVideos = {
             world_id: video.worldId,
             chapter_title: video.chapterTitle,
             chapter_number: video.chapterNumber,
+            angle: video.angle || 1, // Default to 1 if not set
             script: video.script || '',
             audio_url: video.audioUrl,
             hey_gen_video_id: video.heyGenVideoId,
@@ -366,6 +385,7 @@ export const dbVideos = {
         const updateData = {
           chapter_title: updates.chapterTitle,
           chapter_number: updates.chapterNumber,
+          angle: updates.angle,
           script: updates.script,
           audio_url: updates.audioUrl,
           hey_gen_video_id: updates.heyGenVideoId,
@@ -416,6 +436,7 @@ export const dbVideos = {
           worldId: data.world_id,
           chapterTitle: data.chapter_title,
           chapterNumber: data.chapter_number,
+          angle: data.angle || 1, // Default to 1 if not set
           script: data.script || '',
           audioUrl: data.audio_url,
           heyGenVideoId: data.hey_gen_video_id,

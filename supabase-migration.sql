@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS worlds (
   author TEXT DEFAULT '',
   eleven_labs_voice_id TEXT DEFAULT '',
   hey_gen_avatar_id TEXT DEFAULT '',
-  hey_gen_image_key TEXT DEFAULT '', -- Image key from HeyGen Upload Asset API for Avatar IV videos
+  hey_gen_image_key TEXT DEFAULT '', -- Image key from HeyGen Upload Asset API for Avatar IV videos (deprecated, use _1, _2, _3)
+  hey_gen_image_key_1 TEXT DEFAULT '', -- Image key for angle 1
+  hey_gen_image_key_2 TEXT DEFAULT '', -- Image key for angle 2
+  hey_gen_image_key_3 TEXT DEFAULT '', -- Image key for angle 3
   system_prompt TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -20,6 +23,7 @@ CREATE TABLE IF NOT EXISTS videos (
   world_id UUID NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
   chapter_title TEXT NOT NULL,
   chapter_number INTEGER NOT NULL,
+  angle INTEGER DEFAULT 1 CHECK (angle IN (1, 2, 3)), -- Which angle (1, 2, or 3) this video represents
   script TEXT DEFAULT '',
   audio_url TEXT,
   hey_gen_video_id TEXT,

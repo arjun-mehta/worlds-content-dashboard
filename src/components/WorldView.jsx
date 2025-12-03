@@ -15,9 +15,12 @@ export default function WorldView() {
     elevenLabsVoiceId: '',
     heyGenAvatarId: '',
     heyGenImageKey: '',
+    heyGenImageKey1: '',
+    heyGenImageKey2: '',
+    heyGenImageKey3: '',
     systemPrompt: '',
   });
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState({ angle1: false, angle2: false, angle3: false });
 
   if (!selectedWorld) {
     return (
@@ -39,7 +42,10 @@ export default function WorldView() {
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
       heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
-      heyGenImageKey: selectedWorld.heyGenImageKey || '',
+      heyGenImageKey: selectedWorld.heyGenImageKey || '', // Deprecated, kept for backward compatibility
+      heyGenImageKey1: selectedWorld.heyGenImageKey1 || '',
+      heyGenImageKey2: selectedWorld.heyGenImageKey2 || '',
+      heyGenImageKey3: selectedWorld.heyGenImageKey3 || '',
       systemPrompt: selectedWorld.systemPrompt || '',
     });
     setIsEditingDetails(true);
@@ -57,12 +63,15 @@ export default function WorldView() {
       author: selectedWorld.author || '',
       elevenLabsVoiceId: selectedWorld.elevenLabsVoiceId || '',
       heyGenAvatarId: selectedWorld.heyGenAvatarId || '',
-      heyGenImageKey: selectedWorld.heyGenImageKey || '',
+      heyGenImageKey: selectedWorld.heyGenImageKey || '', // Deprecated, kept for backward compatibility
+      heyGenImageKey1: selectedWorld.heyGenImageKey1 || '',
+      heyGenImageKey2: selectedWorld.heyGenImageKey2 || '',
+      heyGenImageKey3: selectedWorld.heyGenImageKey3 || '',
       systemPrompt: selectedWorld.systemPrompt || '',
     });
   };
 
-  const handleImageUpload = async (event) => {
+  const handleImageUpload = async (event, angle) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -78,7 +87,8 @@ export default function WorldView() {
       return;
     }
 
-    setUploadingImage(true);
+    const angleKey = `angle${angle}`;
+    setUploadingImage({ ...uploadingImage, [angleKey]: true });
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -95,23 +105,23 @@ export default function WorldView() {
       }
 
       const data = await response.json();
-      console.log('✅ Image uploaded to HeyGen, image_key:', data.image_key);
+      console.log(`✅ Image ${angle} uploaded to HeyGen, image_key:`, data.image_key);
       
-      // Update the editedFields with the new image_key
+      // Update the editedFields with the new image_key for the specific angle
+      const imageKeyField = `heyGenImageKey${angle}`;
       setEditedFields({
         ...editedFields,
-        heyGenImageKey: data.image_key,
+        [imageKeyField]: data.image_key,
       });
       
       // Also update the world immediately
-      await updateWorld(selectedWorld.id, {
-        heyGenImageKey: data.image_key,
-      });
+      const updateData = { [imageKeyField]: data.image_key };
+      await updateWorld(selectedWorld.id, updateData);
     } catch (error) {
       console.error('Error uploading image:', error);
       alert(error.message || 'Failed to upload image to HeyGen');
     } finally {
-      setUploadingImage(false);
+      setUploadingImage({ ...uploadingImage, [angleKey]: false });
       // Reset file input
       event.target.value = '';
     }
@@ -198,25 +208,43 @@ export default function WorldView() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-black mb-2">
-                  Author Image (for Avatar IV videos)
+                  Author Images (3 angles for Avatar IV videos)
                 </label>
-                <div className="space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={uploadingImage}
-                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-black disabled:opacity-50"
-                  />
-                  {uploadingImage && (
-                    <p className="text-sm text-gray-600">Uploading image to HeyGen...</p>
-                  )}
-                  {editedFields.heyGenImageKey && (
-                    <div className="p-2 bg-gray-50 border border-gray-200 rounded">
-                      <p className="text-xs text-gray-600 mb-1">Image Key:</p>
-                      <p className="text-sm font-mono text-black break-all">{editedFields.heyGenImageKey}</p>
-                    </div>
-                  )}
+                <div className="space-y-4">
+                  {[1, 2, 3].map((angle) => {
+                    const imageKeyField = `heyGenImageKey${angle}`;
+                    const angleKey = `angle${angle}`;
+                    return (
+                      <div key={angle} className="border border-gray-300 rounded p-3">
+                        <label className="block text-xs font-medium text-gray-600 mb-2">
+                          Angle {angle}
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, angle)}
+                          disabled={uploadingImage[angleKey]}
+                          className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-black disabled:opacity-50"
+                        />
+                        {uploadingImage[angleKey] && (
+                          <p className="text-sm text-gray-600 mt-1">Uploading image {angle} to HeyGen...</p>
+                        )}
+                        {editedFields[imageKeyField] && (
+                          <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
+                            <p className="text-xs text-gray-600 mb-1">Image Key:</p>
+                            <p className="text-sm font-mono text-black break-all">{editedFields[imageKeyField]}</p>
+                            {editedFields[imageKeyField].startsWith('image/') && (
+                              <img
+                                src={`https://resource2.heygen.ai/${editedFields[imageKeyField]}`}
+                                alt={`Author Angle ${angle}`}
+                                className="mt-2 max-h-24 rounded"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -264,11 +292,28 @@ export default function WorldView() {
                   <p className="text-sm font-medium text-gray-600">HeyGen Avatar ID</p>
                   <p className="text-black">{selectedWorld.heyGenAvatarId || '—'}</p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Author Image Key</p>
-                  <p className="text-black font-mono text-xs break-all">
-                    {selectedWorld.heyGenImageKey || '—'}
-                  </p>
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-gray-600 mb-2">Author Image Keys (3 angles)</p>
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((angle) => {
+                      const imageKey = selectedWorld[`heyGenImageKey${angle}`] || '';
+                      return (
+                        <div key={angle} className="p-2 bg-gray-50 border border-gray-200 rounded">
+                          <p className="text-xs font-medium text-gray-600">Angle {angle}:</p>
+                          <p className="text-black font-mono text-xs break-all">
+                            {imageKey || '—'}
+                          </p>
+                          {imageKey && imageKey.startsWith('image/') && (
+                            <img
+                              src={`https://resource2.heygen.ai/${imageKey}`}
+                              alt={`Author Angle ${angle}`}
+                              className="mt-2 max-h-20 rounded"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div>
@@ -292,7 +337,7 @@ export default function WorldView() {
               + Create New Chapter
             </button>
           </div>
-          <VideosList videos={videos} />
+          <VideosList videos={videos} worldName={selectedWorld.name} />
         </div>
 
         {/* Chapter Creator Modal */}

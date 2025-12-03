@@ -6,7 +6,10 @@ export const World = {
   author: String,
   elevenLabsVoiceId: String,
   heyGenAvatarId: String,
-  heyGenImageKey: String, // Image key from HeyGen Upload Asset API for Avatar IV videos
+  heyGenImageKey: String, // Deprecated: use heyGenImageKey1, heyGenImageKey2, heyGenImageKey3
+  heyGenImageKey1: String, // Image key for angle 1
+  heyGenImageKey2: String, // Image key for angle 2
+  heyGenImageKey3: String, // Image key for angle 3
   systemPrompt: String,
   createdAt: String,
   updatedAt: String,
@@ -17,6 +20,7 @@ export const Video = {
   worldId: String,
   chapterTitle: String,
   chapterNumber: Number,
+  angle: Number, // 1, 2, or 3 - which angle this video represents
   script: String,
   audioUrl: String,
   heyGenVideoId: String,

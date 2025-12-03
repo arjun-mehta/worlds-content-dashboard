@@ -138,11 +138,12 @@ export const VideosProvider = ({ children }) => {
     };
   }, []);
 
-  const createVideo = async (worldId, chapterTitle, chapterNumber, script, avatarId, audioUrl = null) => {
+  const createVideo = async (worldId, chapterTitle, chapterNumber, script, avatarId, audioUrl = null, angle = 1) => {
     const newVideo = {
       worldId,
       chapterTitle,
       chapterNumber: chapterNumber || 1, // Use provided chapter number, default to 1
+      angle: angle || 1, // Which angle (1, 2, or 3) this video represents
       script,
       audioUrl: audioUrl || null, // Include audio URL if provided (Supabase URL)
       heyGenVideoId: null,

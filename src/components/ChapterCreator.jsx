@@ -85,10 +85,16 @@ export default function ChapterCreator({ world, onClose }) {
   };
 
   const handleGenerateVideo = async () => {
-    // Check if we have an image key (either from world or manually entered)
-    const imageKey = world.heyGenImageKey || avatarId;
-    if (!imageKey || !imageKey.trim()) {
-      setError('Please upload an author image in World Details or provide an image key');
+    // Check if we have at least one image key
+    const imageKeys = [
+      world.heyGenImageKey1 || world.heyGenImageKey || avatarId,
+      world.heyGenImageKey2 || world.heyGenImageKey || avatarId,
+      world.heyGenImageKey3 || world.heyGenImageKey || avatarId,
+    ];
+    
+    const hasAtLeastOneImage = imageKeys.some(key => key && key.trim());
+    if (!hasAtLeastOneImage) {
+      setError('Please upload at least one author image in World Details or provide an image key');
       return;
     }
 
@@ -102,44 +108,63 @@ export default function ChapterCreator({ world, onClose }) {
     setStep('generating-video');
 
     try {
-      // Generate Avatar IV video via HeyGen using the audio blob and script
-      // Use heyGenImageKey from world if available, otherwise fall back to avatarId
-      const imageKey = world.heyGenImageKey || avatarId;
-      if (!imageKey) {
-        throw new Error('Please upload an author image in World Details or provide an image key');
-      }
-      const heyGenResponse = await generateVideo(audioBlob, imageKey, script, chapterTitle);
-      console.log('✅ HeyGen response:', heyGenResponse);
-      console.log('✅ Supabase audio URL:', heyGenResponse.audioUrl);
+      // Generate 3 Avatar IV videos (one for each angle)
+      const videos = [];
+      let sharedAudioUrl = null; // Will be set from the first response
       
-      // Create video record with the Supabase audio URL from HeyGen response
-      const video = await createVideo(
-        world.id, 
-        chapterTitle, 
-        parseInt(chapterNumber),
-        script, 
-        avatarId, 
-        heyGenResponse.audioUrl // Pass Supabase URL directly to createVideo
-      );
-      console.log('✅ Video created with Supabase audio URL:', video);
-      
-      // Update video with HeyGen info
-      await updateVideo(video.id, {
-        heyGenVideoId: heyGenResponse.videoId,
-        heyGenStatus: heyGenResponse.status,
-      });
-      console.log('✅ Video updated with HeyGen info');
+      for (let angle = 1; angle <= 3; angle++) {
+        const imageKey = imageKeys[angle - 1];
+        if (!imageKey || !imageKey.trim()) {
+          console.warn(`⚠️ Skipping angle ${angle} - no image key available`);
+          continue;
+        }
+        
+        console.log(`🎬 Generating video for angle ${angle} with image key:`, imageKey);
+        const heyGenResponse = await generateVideo(audioBlob, imageKey, script, `${chapterTitle} - Angle ${angle}`);
+        console.log(`✅ HeyGen response for angle ${angle}:`, heyGenResponse);
+        
+        // Use audio URL from first response for all videos
+        if (angle === 1) {
+          sharedAudioUrl = heyGenResponse.audioUrl;
+        }
+        const finalAudioUrl = sharedAudioUrl || heyGenResponse.audioUrl;
+        
+        // Create video record with the Supabase audio URL from HeyGen response
+        const video = await createVideo(
+          world.id, 
+          chapterTitle, 
+          parseInt(chapterNumber),
+          script, 
+          avatarId, 
+          finalAudioUrl, // Pass Supabase URL directly to createVideo
+          angle // Specify which angle this video represents
+        );
+        console.log(`✅ Video ${angle} created with Supabase audio URL:`, video);
+        
+        // Update video with HeyGen info
+        await updateVideo(video.id, {
+          heyGenVideoId: heyGenResponse.videoId,
+          heyGenStatus: heyGenResponse.status,
+        });
+        console.log(`✅ Video ${angle} updated with HeyGen info`);
 
-      // Start polling for video status if it's processing
-      if (heyGenResponse.status === 'processing' && heyGenResponse.videoId) {
-        console.log('🔄 Starting to poll for video status...');
-        pollVideoStatus(video.id, heyGenResponse.videoId);
+        // Start polling for video status if it's processing
+        if (heyGenResponse.status === 'processing' && heyGenResponse.videoId) {
+          console.log(`🔄 Starting to poll for video ${angle} status...`);
+          pollVideoStatus(video.id, heyGenResponse.videoId);
+        }
+        
+        videos.push(video);
+      }
+      
+      if (videos.length === 0) {
+        throw new Error('No videos were created. Please ensure at least one author image is uploaded.');
       }
 
       setStep('complete');
-      console.log('✅ Step set to complete - video should be visible in dashboard');
+      console.log(`✅ Step set to complete - ${videos.length} videos should be visible in dashboard`);
       
-      // Auto-close modal after 2 seconds so user can see the video in the dashboard
+      // Auto-close modal after 2 seconds so user can see the videos in the dashboard
       setTimeout(() => {
         handleClose();
       }, 2000);
