@@ -161,7 +161,20 @@ export default function ChapterCreator({ world, onClose, existingChapter = null 
     setStep('generating-audio');
 
     try {
-      const audioResponse = await generateAudio(script, world.elevenLabsVoiceId);
+      // Use the current script from state (which may have been edited by the user)
+      // Get the current script value directly from state to ensure we have the latest edits
+      const scriptToUse = script.trim();
+      if (!scriptToUse) {
+        setError('Script is empty. Please generate or enter a script first.');
+        setStep('script');
+        return;
+      }
+      
+      console.log('🎵 Generating audio with script (length):', scriptToUse.length);
+      console.log('🎵 Script preview (first 200 chars):', scriptToUse.substring(0, 200));
+      console.log('🎵 Script preview (last 100 chars):', scriptToUse.substring(Math.max(0, scriptToUse.length - 100)));
+      
+      const audioResponse = await generateAudio(scriptToUse, world.elevenLabsVoiceId);
       console.log('🎵 Audio generated, response:', audioResponse);
       console.log('🎵 Audio blob URL (temporary):', audioResponse.audioUrl);
       
@@ -565,13 +578,12 @@ export default function ChapterCreator({ world, onClose, existingChapter = null 
             <div className="grid grid-cols-2 gap-6 min-h-[70vh]">
               <div className="flex flex-col">
                 <label className="block text-sm font-medium text-black mb-2">
-                  Generated Script
+                  Generated Script (editable - changes will be used when regenerating audio or video)
                 </label>
                 <textarea
                   value={script}
                   onChange={(e) => setScript(e.target.value)}
                   className="flex-1 w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-black resize-none"
-                  readOnly
                 />
               </div>
               <div className="flex flex-col space-y-4">
