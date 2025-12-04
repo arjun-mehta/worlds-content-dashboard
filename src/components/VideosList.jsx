@@ -2,7 +2,7 @@ import { useState } from 'react';
 import JSZip from 'jszip';
 import { useVideos } from '../contexts/VideosContext';
 
-export default function VideosList({ videos, worldName = '' }) {
+export default function VideosList({ videos, worldName = '', onEditChapter = null }) {
   const { deleteVideo, refreshVideoStatus } = useVideos();
   const [refreshingId, setRefreshingId] = useState(null);
   const [expandedChapters, setExpandedChapters] = useState(new Set()); // Track which chapters are expanded
@@ -160,10 +160,22 @@ export default function VideosList({ videos, worldName = '' }) {
     return (a.chapterNumber || 0) - (b.chapterNumber || 0);
   });
 
-  // Sort videos within each chapter by angle
-  sortedChapters.forEach(chapter => {
-    chapter.videos.sort((a, b) => (a.angle || 1) - (b.angle || 1));
-  });
+      // Sort videos within each chapter by angle
+      sortedChapters.forEach(chapter => {
+        chapter.videos.sort((a, b) => (a.angle || 1) - (b.angle || 1));
+      });
+
+      // Filter out placeholder videos (pending status with no heyGenVideoId) from display
+      // These are just for storing script/audio data, not actual video generation
+      sortedChapters.forEach(chapter => {
+        chapter.videos = chapter.videos.filter(v => 
+          v.heyGenVideoId || 
+          v.heyGenStatus !== 'pending' ||
+          v.heyGenStatus === 'processing' ||
+          v.heyGenStatus === 'completed' ||
+          v.heyGenStatus === 'failed'
+        );
+      });
 
   return (
     <div className="bg-white border border-gray-300 rounded overflow-hidden">
@@ -174,23 +186,51 @@ export default function VideosList({ videos, worldName = '' }) {
           const allCompleted = chapter.videos.every(v => v.heyGenStatus === 'completed');
           const hasCompletedVideos = chapter.videos.some(v => v.heyGenStatus === 'completed' && v.videoUrl);
           const hasAudio = chapter.videos.some(v => v.audioUrl);
+          
+          // Check if any videos have been generated (have heyGenVideoId or are processing/completed/failed)
+          // A video is only "generated" if it has been sent to HeyGen (has heyGenVideoId) or has a non-pending status
+          // Placeholder videos (pending status with no heyGenVideoId) don't count as "generated"
+          const hasGeneratedVideos = chapter.videos.some(v => 
+            v.heyGenVideoId || 
+            (v.heyGenStatus !== 'pending' && v.heyGenStatus !== null) ||
+            v.heyGenStatus === 'processing' || 
+            v.heyGenStatus === 'completed' || 
+            v.heyGenStatus === 'failed'
+          );
 
           return (
             <div key={chapterKey} className="bg-white">
               {/* Chapter Header - Always Visible */}
               <div 
-                className="px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer flex items-center justify-between"
-                onClick={() => toggleChapter(chapterKey)}
+                className={`px-4 py-3 hover:bg-gray-50 transition-colors flex items-center justify-between ${hasGeneratedVideos || onEditChapter ? 'cursor-pointer' : ''}`}
+                onClick={(e) => {
+                  // If no videos generated, open edit modal
+                  if (!hasGeneratedVideos && onEditChapter) {
+                    e.stopPropagation();
+                    const firstVideo = chapter.videos[0]; // Get first video (angle 1) for chapter data
+                    onEditChapter({
+                      chapterNumber: chapter.chapterNumber,
+                      chapterTitle: chapter.chapterTitle,
+                      script: firstVideo?.script || '',
+                      audioUrl: firstVideo?.audioUrl || null,
+                    });
+                  } else if (hasGeneratedVideos) {
+                    // If videos exist, toggle expansion
+                    toggleChapter(chapterKey);
+                  }
+                }}
               >
                 <div className="flex items-center gap-3 flex-1">
-                  <svg
-                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  {hasGeneratedVideos && (
+                    <svg
+                      className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-semibold text-black">
                       Chapter {chapter.chapterNumber}
@@ -198,12 +238,49 @@ export default function VideosList({ videos, worldName = '' }) {
                     <span className="text-sm text-black">
                       {chapter.chapterTitle}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      ({chapter.videos.length} {chapter.videos.length === 1 ? 'video' : 'videos'})
-                    </span>
+                    {hasGeneratedVideos && (
+                      <span className="text-xs text-gray-500">
+                        ({chapter.videos.length} {chapter.videos.length === 1 ? 'video' : 'videos'})
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Edit button - opens ChapterCreator for this chapter */}
+                  {onEditChapter && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const firstVideo = chapter.videos[0]; // Get first video (angle 1) for chapter data
+                        onEditChapter({
+                          chapterNumber: chapter.chapterNumber,
+                          chapterTitle: chapter.chapterTitle,
+                          script: firstVideo?.script || '',
+                          audioUrl: firstVideo?.audioUrl || null,
+                        });
+                      }}
+                      className="text-xs text-black hover:text-gray-600 underline px-2 py-1"
+                      title="Edit chapter and generate script/audio/video"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {/* Delete button - deletes all videos for this chapter */}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Are you sure you want to delete Chapter ${chapter.chapterNumber}: "${chapter.chapterTitle}"? This will delete all ${chapter.videos.length} video${chapter.videos.length === 1 ? '' : 's'} for this chapter.`)) {
+                        // Delete all videos for this chapter
+                        for (const video of chapter.videos) {
+                          await deleteVideo(video.id);
+                        }
+                      }
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 underline px-2 py-1"
+                    title="Delete this chapter and all its videos"
+                  >
+                    Delete
+                  </button>
                   {/* Download All button - always visible if has completed videos */}
                   {hasCompletedVideos && (
                     <button
@@ -220,8 +297,8 @@ export default function VideosList({ videos, worldName = '' }) {
                 </div>
               </div>
 
-              {/* Chapter Content - Expandable */}
-              {isExpanded && (
+              {/* Chapter Content - Expandable (only if videos have been generated) */}
+              {isExpanded && hasGeneratedVideos && (
                 <div className="bg-gray-50 border-t border-gray-200">
                   <table className="w-full">
                     <thead className="bg-gray-100 border-b border-gray-200">

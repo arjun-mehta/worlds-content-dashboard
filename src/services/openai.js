@@ -17,6 +17,73 @@ const getOpenAIClient = () => {
   });
 };
 
+// Generate chapter list for a book based on title and author
+export const generateChapters = async (bookTitle, author) => {
+  try {
+    const openai = getOpenAIClient();
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that provides chapter information for books. Return a JSON object with a "chapters" array. Each chapter should have "chapterNumber" (integer) and "chapterTitle" (string). Format: {"chapters": [{"chapterNumber": 1, "chapterTitle": "Chapter Title"}, ...]}',
+        },
+        {
+          role: 'user',
+          content: `Provide all chapters for the book "${bookTitle}" by ${author || 'unknown author'}. Return a JSON object with a "chapters" array containing chapterNumber and chapterTitle for each chapter.`,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+    });
+
+    const responseText = completion.choices[0].message.content;
+    let chapters;
+    
+    try {
+      const parsed = JSON.parse(responseText);
+      // Handle different possible response formats
+      if (Array.isArray(parsed)) {
+        chapters = parsed;
+      } else if (parsed.chapters && Array.isArray(parsed.chapters)) {
+        chapters = parsed.chapters;
+      } else if (parsed.data && Array.isArray(parsed.data)) {
+        chapters = parsed.data;
+      } else {
+        // Try to extract array from response
+        const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          chapters = JSON.parse(arrayMatch[0]);
+        } else {
+          throw new Error('Unexpected response format');
+        }
+      }
+    } catch (parseError) {
+      // Fallback: try to extract JSON array from text
+      const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        chapters = JSON.parse(arrayMatch[0]);
+      } else {
+        throw new Error('Failed to parse chapter list from OpenAI response');
+      }
+    }
+
+    // Validate and normalize chapters
+    return chapters
+      .filter(ch => ch.chapterNumber && ch.chapterTitle)
+      .map(ch => ({
+        chapterNumber: parseInt(ch.chapterNumber) || ch.chapterNumber,
+        chapterTitle: String(ch.chapterTitle).trim(),
+      }))
+      .sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
+  } catch (error) {
+    console.error('Error generating chapters:', error);
+    throw new Error('Failed to generate chapter list. Please check your OpenAI API key and try again.');
+  }
+};
+
 export const generateScript = async (systemPrompt, chapterTitle, chapterNumber, bookName) => {
   try {
     const openai = getOpenAIClient();

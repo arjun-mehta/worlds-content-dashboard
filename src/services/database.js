@@ -400,12 +400,15 @@ export const dbVideos = {
           updateData[key] === undefined && delete updateData[key]
         );
         
+        console.log('💾 Database update - ID:', id, 'Update data:', updateData);
         const { data, error } = await supabase
           .from('videos')
           .update(updateData)
           .eq('id', id)
           .select()
           .single();
+        
+        console.log('💾 Database update response - Data:', data, 'Error:', error);
         
         if (error) {
           console.error('Error updating video in Supabase:', error);

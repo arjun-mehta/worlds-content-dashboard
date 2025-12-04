@@ -3,13 +3,19 @@ import JSZip from 'jszip';
 import { useWorlds } from '../contexts/WorldsContext';
 import { useVideos } from '../contexts/VideosContext';
 import { API_URL } from '../config';
+import { generateChapters } from '../services/openai';
 import VideosList from './VideosList';
 import ChapterCreator from './ChapterCreator';
 
 export default function WorldView() {
   const { selectedWorld, updateWorld } = useWorlds();
-  const { getVideosByWorldId } = useVideos();
+  const { getVideosByWorldId, createVideo } = useVideos();
   const [showChapterCreator, setShowChapterCreator] = useState(false);
+  const [showChapterImporter, setShowChapterImporter] = useState(false);
+  const [isGeneratingChapters, setIsGeneratingChapters] = useState(false);
+  const [generatedChapters, setGeneratedChapters] = useState([]);
+  const [editingChapterIndex, setEditingChapterIndex] = useState(null);
+  const [editingChapter, setEditingChapter] = useState(null); // Chapter being edited
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editedFields, setEditedFields] = useState({
     name: '',
@@ -170,6 +176,100 @@ export default function WorldView() {
       heyGenImageKey3: selectedWorld.heyGenImageKey3 || '',
       systemPrompt: selectedWorld.systemPrompt || '',
     });
+  };
+
+  const handleGenerateChapters = async () => {
+    if (!selectedWorld.name || !selectedWorld.author) {
+      alert('Please set the book name and author in World Details first.');
+      return;
+    }
+
+    setIsGeneratingChapters(true);
+    try {
+      const chapters = await generateChapters(selectedWorld.name, selectedWorld.author);
+      setGeneratedChapters(chapters);
+      setShowChapterImporter(true);
+    } catch (error) {
+      alert(error.message || 'Failed to generate chapters. Please try again.');
+    } finally {
+      setIsGeneratingChapters(false);
+    }
+  };
+
+  const handleEditChapter = (index, field, value) => {
+    const updated = [...generatedChapters];
+    updated[index] = { ...updated[index], [field]: value };
+    setGeneratedChapters(updated);
+  };
+
+  const handleDeleteChapter = (index) => {
+    const updated = generatedChapters.filter((_, i) => i !== index);
+    // Renumber all chapters sequentially starting from 1
+    const renumbered = updated.map((chapter, idx) => ({
+      ...chapter,
+      chapterNumber: idx + 1,
+    }));
+    setGeneratedChapters(renumbered);
+  };
+
+  const handleAddChapter = () => {
+    const maxChapterNumber = generatedChapters.length > 0
+      ? Math.max(...generatedChapters.map(ch => ch.chapterNumber || 0))
+      : 0;
+    const newChapter = {
+      chapterNumber: maxChapterNumber + 1,
+      chapterTitle: '',
+    };
+    setGeneratedChapters([...generatedChapters, newChapter]);
+    setEditingChapterIndex(generatedChapters.length); // Edit the newly added chapter
+  };
+
+  const handleImportChapters = async () => {
+    if (generatedChapters.length === 0) return;
+
+    // Validate all chapters have titles
+    const invalidChapters = generatedChapters.filter(ch => !ch.chapterTitle || !ch.chapterTitle.trim());
+    if (invalidChapters.length > 0) {
+      alert('Please provide titles for all chapters before importing.');
+      return;
+    }
+
+    try {
+      // Create placeholder video records for each chapter (angle 1 only for now)
+      // Users can later generate scripts/audio/videos for each chapter
+      let importedCount = 0;
+      for (const chapter of generatedChapters) {
+        // Check if chapter already exists
+        const existingChapter = videos.find(
+          v => v.chapterNumber === chapter.chapterNumber && v.worldId === selectedWorld.id
+        );
+        
+        if (!existingChapter) {
+          await createVideo(
+            selectedWorld.id,
+            chapter.chapterTitle.trim(),
+            chapter.chapterNumber,
+            '', // No script yet
+            '', // No avatarId
+            null, // No audio yet
+            1 // Default to angle 1 (users can generate all 3 angles later)
+          );
+          importedCount++;
+        }
+      }
+      
+      setShowChapterImporter(false);
+      setGeneratedChapters([]);
+      setEditingChapterIndex(null);
+      if (importedCount > 0) {
+        alert(`Successfully imported ${importedCount} chapter${importedCount === 1 ? '' : 's'}! You can now generate scripts and videos for each chapter.`);
+      } else {
+        alert('All chapters already exist. No new chapters were imported.');
+      }
+    } catch (error) {
+      console.error('Error importing chapters:', error);
+      alert('Failed to import some chapters. Please try again.');
+    }
   };
 
   const handleImageUpload = async (event, angle) => {
@@ -452,6 +552,14 @@ export default function WorldView() {
                 </button>
               )}
               <button
+                onClick={handleGenerateChapters}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!selectedWorld.name || !selectedWorld.author || isGeneratingChapters}
+                title={!selectedWorld.name || !selectedWorld.author ? 'Book name and author are required' : 'Generate chapters from book title and author'}
+              >
+                {isGeneratingChapters ? 'Generating...' : '📚 Generate Chapters'}
+              </button>
+              <button
                 onClick={() => setShowChapterCreator(true)}
                 className="bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
               >
@@ -459,15 +567,145 @@ export default function WorldView() {
               </button>
             </div>
           </div>
-          <VideosList videos={videos} worldName={selectedWorld.name} />
+          <VideosList 
+            videos={videos} 
+            worldName={selectedWorld.name}
+            onEditChapter={(chapter) => {
+              setEditingChapter(chapter);
+              setShowChapterCreator(true);
+            }}
+          />
         </div>
 
         {/* Chapter Creator Modal */}
         {showChapterCreator && (
           <ChapterCreator
             world={selectedWorld}
-            onClose={() => setShowChapterCreator(false)}
+            existingChapter={editingChapter}
+            onClose={() => {
+              setShowChapterCreator(false);
+              setEditingChapter(null);
+            }}
           />
+        )}
+
+        {/* Chapter Importer Modal */}
+        {showChapterImporter && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded border border-gray-300 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-semibold text-black">Import Chapters</h2>
+                  <button
+                    onClick={() => {
+                      setShowChapterImporter(false);
+                      setGeneratedChapters([]);
+                      setEditingChapterIndex(null);
+                    }}
+                    className="text-gray-500 hover:text-black"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                {generatedChapters.length > 0 ? (
+                  <>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Review and edit {generatedChapters.length} chapters for "{selectedWorld.name}" by {selectedWorld.author}. 
+                      You can edit titles, delete chapters, or add new ones before importing.
+                    </p>
+                    <div className="border border-gray-300 rounded max-h-96 overflow-y-auto mb-4">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-300 sticky top-0">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-black">Chapter</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-black">Title</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-black w-20">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {generatedChapters.map((chapter, index) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  value={chapter.chapterNumber}
+                                  onChange={(e) => handleEditChapter(index, 'chapterNumber', parseInt(e.target.value) || 1)}
+                                  min="1"
+                                  className="w-20 p-1.5 border border-gray-300 rounded focus:outline-none focus:border-black text-sm"
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="text"
+                                  value={chapter.chapterTitle}
+                                  onChange={(e) => handleEditChapter(index, 'chapterTitle', e.target.value)}
+                                  placeholder="Chapter title"
+                                  className="w-full p-1.5 border border-gray-300 rounded focus:outline-none focus:border-black text-sm"
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <button
+                                  onClick={() => handleDeleteChapter(index)}
+                                  className="text-red-600 hover:text-red-800 text-xs underline"
+                                  title="Delete chapter"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="flex items-center justify-between mb-4">
+                      <button
+                        onClick={handleAddChapter}
+                        className="text-sm text-black hover:text-gray-600 underline"
+                      >
+                        + Add Chapter
+                      </button>
+                      <span className="text-xs text-gray-500">
+                        {generatedChapters.length} chapter{generatedChapters.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleImportChapters}
+                        className="flex-1 bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
+                      >
+                        Import All ({generatedChapters.length} chapters)
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowChapterImporter(false);
+                          setGeneratedChapters([]);
+                          setEditingChapterIndex(null);
+                        }}
+                        className="bg-white hover:bg-gray-100 text-black font-medium py-2 px-4 rounded transition-colors border border-gray-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">No chapters found. Please try again.</p>
+                    <button
+                      onClick={() => {
+                        setShowChapterImporter(false);
+                        setGeneratedChapters([]);
+                        setEditingChapterIndex(null);
+                      }}
+                      className="mt-4 bg-black hover:bg-gray-800 text-white font-medium py-2 px-4 rounded transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
