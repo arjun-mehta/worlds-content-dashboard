@@ -490,30 +490,44 @@ export const dbVideos = {
    * Delete a video
    */
   async delete(id) {
-    if (isSupabaseConfigured()) {
+    console.log('🗑️ dbVideos.delete called for ID:', id);
+    
+    // Check if ID is a UUID (Supabase format) or a fallback ID (timestamp format)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    
+    if (isSupabaseConfigured() && isUUID) {
       try {
-        const { error } = await supabase
+        console.log('🗑️ Deleting from Supabase:', id);
+        const { data, error } = await supabase
           .from('videos')
           .delete()
-          .eq('id', id);
+          .eq('id', id)
+          .select();
         
         if (error) {
-          console.error('Error deleting video from Supabase:', error);
+          console.error('❌ Error deleting video from Supabase:', error);
           // Fallback to localStorage
           const videos = storage.getVideos();
           storage.saveVideos(videos.filter(v => v.id !== id));
+          return;
         }
+        
+        console.log('✅ Video deleted from Supabase:', id);
+        return;
       } catch (error) {
-        console.error('Exception deleting video from Supabase:', error);
+        console.error('❌ Exception deleting video from Supabase:', error);
         // Fallback to localStorage
         const videos = storage.getVideos();
         storage.saveVideos(videos.filter(v => v.id !== id));
+        return;
       }
-    } else {
-      // Fallback to localStorage
-      const videos = storage.getVideos();
-      storage.saveVideos(videos.filter(v => v.id !== id));
     }
+    
+    // Fallback to localStorage
+    console.log('🗑️ Deleting from localStorage:', id);
+    const videos = storage.getVideos();
+    storage.saveVideos(videos.filter(v => v.id !== id));
+    console.log('✅ Video deleted from localStorage:', id);
   },
 };
 

@@ -261,11 +261,6 @@ export default function WorldView() {
       setShowChapterImporter(false);
       setGeneratedChapters([]);
       setEditingChapterIndex(null);
-      if (importedCount > 0) {
-        alert(`Successfully imported ${importedCount} chapter${importedCount === 1 ? '' : 's'}! You can now generate scripts and videos for each chapter.`);
-      } else {
-        alert('All chapters already exist. No new chapters were imported.');
-      }
     } catch (error) {
       console.error('Error importing chapters:', error);
       alert('Failed to import some chapters. Please try again.');

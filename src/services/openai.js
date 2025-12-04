@@ -23,7 +23,7 @@ export const generateChapters = async (bookTitle, author) => {
     const openai = getOpenAIClient();
     
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5.1',
       messages: [
         {
           role: 'system',
@@ -35,7 +35,7 @@ export const generateChapters = async (bookTitle, author) => {
         },
       ],
       temperature: 0.3,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       response_format: { type: 'json_object' },
     });
 
@@ -90,7 +90,7 @@ export const generateScript = async (systemPrompt, chapterTitle, chapterNumber, 
     
     // Step 1: Generate the initial script
     const scriptCompletion = await openai.chat.completions.create({
-      model: 'gpt-4o', // Latest and best OpenAI model
+      model: 'gpt-5.1', // Latest OpenAI model
       messages: [
         {
           role: 'system',
@@ -98,11 +98,14 @@ export const generateScript = async (systemPrompt, chapterTitle, chapterNumber, 
         },
         {
           role: 'user',
-          content: `${chapterNumber}: "${chapterTitle}"`,
+          content: `Always begin your response directly with the first line of the script—no framing, no introductions.
+
+Do NOT start with phrases such as "Imagine," "I remember," "Picture," "In this scenario," or similar.
+
+Generate a script for Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookName}".`,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
     });
 
     const initialScript = scriptCompletion.choices[0].message.content;
@@ -261,7 +264,7 @@ Use these as a guide. You can infer similar, contextually appropriate **audio ta
 3. Reply ONLY with the enhanced text.`;
 
     const enhancementCompletion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5.1',
       messages: [
         {
           role: 'system',
@@ -273,7 +276,7 @@ Use these as a guide. You can infer similar, contextually appropriate **audio ta
         },
       ],
       temperature: 0.7,
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
     });
 
     return enhancementCompletion.choices[0].message.content;

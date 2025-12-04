@@ -142,6 +142,17 @@ export default function VideosList({ videos, worldName = '', onEditChapter = nul
   }
 
   // Group videos by chapter (chapterNumber + chapterTitle)
+  // Keep all videos (including placeholders) for accurate counts and deletion
+  const allVideosByChapter = videos.reduce((acc, video) => {
+    const chapterKey = `${video.chapterNumber}-${video.chapterTitle}`;
+    if (!acc[chapterKey]) {
+      acc[chapterKey] = [];
+    }
+    acc[chapterKey].push(video);
+    return acc;
+  }, {});
+
+  // Group videos for display (filtered)
   const groupedVideos = videos.reduce((acc, video) => {
     const chapterKey = `${video.chapterNumber}-${video.chapterTitle}`;
     if (!acc[chapterKey]) {
@@ -265,19 +276,30 @@ export default function VideosList({ videos, worldName = '', onEditChapter = nul
                       Edit
                     </button>
                   )}
-                  {/* Delete button - deletes all videos for this chapter */}
+                  {/* Delete button - deletes all videos for this chapter (including placeholders) */}
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      if (window.confirm(`Are you sure you want to delete Chapter ${chapter.chapterNumber}: "${chapter.chapterTitle}"? This will delete all ${chapter.videos.length} video${chapter.videos.length === 1 ? '' : 's'} for this chapter.`)) {
-                        // Delete all videos for this chapter
-                        for (const video of chapter.videos) {
-                          await deleteVideo(video.id);
+                      // Get all videos for this chapter (including placeholders that are filtered from display)
+                      const allVideosForChapter = allVideosByChapter[chapterKey] || [];
+                      const videoCount = allVideosForChapter.length;
+                      
+                      if (window.confirm(`Are you sure you want to delete Chapter ${chapter.chapterNumber}: "${chapter.chapterTitle}"? This will delete all ${videoCount} video${videoCount === 1 ? '' : 's'} for this chapter (including script and audio data).`)) {
+                        try {
+                          // Delete all videos for this chapter (including placeholders)
+                          for (const video of allVideosForChapter) {
+                            console.log('🗑️ Deleting video:', video.id);
+                            await deleteVideo(video.id);
+                          }
+                          console.log('✅ All videos deleted for chapter');
+                        } catch (error) {
+                          console.error('❌ Error deleting videos:', error);
+                          alert('Failed to delete some videos. Please try again.');
                         }
                       }
                     }}
                     className="text-xs text-red-600 hover:text-red-800 underline px-2 py-1"
-                    title="Delete this chapter and all its videos"
+                    title="Delete this chapter and all its videos (including script and audio data)"
                   >
                     Delete
                   </button>
