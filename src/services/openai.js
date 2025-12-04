@@ -98,7 +98,7 @@ export const generateScript = async (systemPrompt, chapterTitle, chapterNumber, 
         },
         {
           role: 'user',
-          content: `Generate a script for Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookName}".`,
+          content: `${chapterNumber}: "${chapterTitle}"`,
         },
       ],
       temperature: 0.7,
